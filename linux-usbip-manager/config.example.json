@@ -1,0 +1,65 @@
+{
+  "bind_policy": "allow_all",
+  "allowed_devices": [
+    {
+      "vid": "303a",
+      "pid": "1001",
+      "name": "Espressif ESP32-S3 USB Serial/JTAG"
+    },
+    {
+      "vid": "303a",
+      "pid": "*",
+      "name": "Espressif devices"
+    },
+    {
+      "vid": "10c4",
+      "pid": "ea60",
+      "name": "Silicon Labs CP210x"
+    },
+    {
+      "vid": "1a86",
+      "pid": "7523",
+      "name": "WCH CH340/CH341"
+    },
+    {
+      "vid": "0403",
+      "pid": "6010",
+      "name": "ESP-PROG / FTDI FT2232H"
+    },
+    {
+      "vid": "0403",
+      "pid": "6001",
+      "name": "FTDI FT232"
+    }
+  ],
+  "blocked_devices": [
+    {
+      "vid": "1d6b",
+      "pid": "*",
+      "name": "Linux USB root hubs"
+    }
+  ],
+  "block_usb_hubs": true,
+  "settle_seconds": 2.0,
+  "retry_count": 6,
+  "retry_delay_seconds": 1.5,
+  "reconcile_interval_seconds": 5.0,
+  "command_timeout_seconds": 15.0,
+  "state_path": "/run/usbip-manager/state.json",
+  "usbip_tcp_port": 3240,
+  "notify": {
+    "enabled": false,
+    "mode": "json_tcp",
+    "host": "",
+    "port": 12000,
+    "timeout_seconds": 2.0,
+    "tls": false,
+    "shared_secret": ""
+  },
+  "commands": {
+    "usbip": "",
+    "usbipd": "",
+    "modprobe": "",
+    "udevadm": ""
+  }
+}

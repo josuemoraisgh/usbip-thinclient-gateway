@@ -1,0 +1,38 @@
+; USB/IP Suite WinUSB policy INF.
+; Production deployments should sign this package or point config.ini to a
+; signed vendor/Zadig/libwdi driver package. The service applies it through
+; pnputil only to InstanceIds listed in [WinUSB.*] rules.
+
+[Version]
+Signature="$Windows NT$"
+Class=USBDevice
+ClassGuid={88bae032-5a81-49f0-bc3d-a4ff138216d6}
+Provider=%ProviderName%
+DriverVer=04/25/2026,2.0.0.0
+
+[Manufacturer]
+%MfgName%=Standard,NTamd64
+
+[Standard.NTamd64]
+%ESP32S3JTAG.DeviceDesc%=WinUSB_Install, USB\VID_303A&PID_1001&MI_02
+%ESPPROGJTAG.DeviceDesc%=WinUSB_Install, USB\VID_0403&PID_6010&MI_00
+
+[WinUSB_Install]
+Include=winusb.inf
+Needs=WINUSB.NT
+
+[WinUSB_Install.Services]
+Include=winusb.inf
+Needs=WINUSB.NT.Services
+
+[WinUSB_Install.HW]
+AddReg=WinUSB_AddReg
+
+[WinUSB_AddReg]
+HKR,,DeviceInterfaceGUIDs,0x10000,"{8C9A0C62-8B89-4E6D-9E9A-FE31D67D1F41}"
+
+[Strings]
+ProviderName="ThinClient"
+MfgName="ThinClient USB/IP"
+ESP32S3JTAG.DeviceDesc="ESP32-S3 USB Serial/JTAG JTAG WinUSB Interface"
+ESPPROGJTAG.DeviceDesc="ESP-PROG FT2232H Channel A JTAG WinUSB Interface"

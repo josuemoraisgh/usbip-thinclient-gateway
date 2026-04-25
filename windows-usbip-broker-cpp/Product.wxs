@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:fire="http://wixtoolset.org/schemas/v4/wxs/firewall"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package
+      Name="USB/IP Suite"
+      Manufacturer="ThinClient"
+      Version="2.0.0.0"
+      UpgradeCode="2C012E49-1D39-4551-8F67-1503447C4035"
+      Scope="perMachine">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of USB/IP Broker C++ is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Property Id="USBIPPATH" Value="C:\usbip\usbip.exe" />
+    <Property Id="THINCLIENTS" Secure="yes" />
+    <Property Id="ATTACHPOLICY" Value="allowlist" />
+    <Property Id="EVENTPORT" Value="12000" />
+    <Property Id="POLLTIME" Value="5" />
+    <Property Id="AUTOSTARTTRAY" Value="1" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.SourceRoot)\license.rtf" />
+
+    <UI>
+      <ui:WixUI Id="WixUI_InstallDir" />
+
+      <Dialog Id="UsbipConfigDlg" Width="370" Height="270" Title="[ProductName] Setup">
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="340" Height="15" Transparent="yes" NoPrefix="yes" Text="{\WixUI_Font_Title}USB/IP configuration" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="320" Height="25" Transparent="yes" NoPrefix="yes" Text="Configure the Windows Server broker. Thin clients can also be discovered later by Linux event notifications." />
+        <Control Id="Line" Type="Line" X="0" Y="44" Width="370" Height="0" />
+
+        <Control Id="ThinClientsLabel" Type="Text" X="20" Y="65" Width="320" Height="15" Text="Thin client IPs para polling, separados por vírgula:" />
+        <Control Id="ThinClientsEdit" Type="Edit" X="20" Y="82" Width="330" Height="18" Property="THINCLIENTS" />
+
+        <Control Id="UsbipPathLabel" Type="Text" X="20" Y="112" Width="320" Height="15" Text="Caminho do usbip.exe (cliente USB/IP para Windows):" />
+        <Control Id="UsbipPathEdit" Type="Edit" X="20" Y="129" Width="330" Height="18" Property="USBIPPATH" />
+
+        <Control Id="EventPortLabel" Type="Text" X="20" Y="159" Width="150" Height="15" Text="Porta TCP de eventos:" />
+        <Control Id="EventPortEdit" Type="Edit" X="20" Y="176" Width="80" Height="18" Property="EVENTPORT" />
+
+        <Control Id="AutoStartLabel" Type="Text" X="20" Y="206" Width="280" Height="15" Text="Iniciar monitor na bandeja junto com o Windows:" />
+        <Control Id="AutoStartCheck" Type="CheckBox" X="305" Y="206" Width="18" Height="15" Property="AUTOSTARTTRAY" CheckBoxValue="1" />
+
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="Back">
+          <Publish Event="NewDialog" Value="InstallDirDlg" />
+        </Control>
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes" Text="Next">
+          <Publish Event="NewDialog" Value="VerifyReadyDlg" />
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes" Text="Cancel">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+
+      <Publish Dialog="InstallDirDlg" Control="Next" Event="NewDialog" Value="UsbipConfigDlg" Order="4" Condition="WIXUI_DONTVALIDATEPATH OR WIXUI_INSTALLDIR_VALID=&quot;1&quot;" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="UsbipConfigDlg" Order="1" Condition="1" />
+    </UI>
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="UsbipSuite">
+        <Directory Id="DRIVERDIR" Name="drivers" />
+        <Directory Id="TRAYDIR" Name="monitor">
+          <Directory Id="TRAYDATADIR" Name="data">
+            <Directory Id="TRAYASSETSDIR" Name="flutter_assets">
+              <Directory Id="TRAYFONTSDIR" Name="fonts" />
+              <Directory Id="TRAYFXDIR" Name="shaders" />
+            </Directory>
+          </Directory>
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="CommonAppDataFolder">
+      <Directory Id="DATADIR" Name="UsbipBrokerCpp">
+        <Directory Id="LOGDIR" Name="logs" />
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="MainFeature" Title="USB/IP Suite" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+    </Feature>
+  </Package>
+
+  <Fragment>
+    <ComponentGroup Id="ProductComponents">
+      <Component Id="ServiceComponent" Directory="INSTALLFOLDER" Guid="7A3E8CC1-719A-470B-B607-F9956E16CC4E">
+        <File Id="ServiceExe" Source="$(var.SourceDir)\UsbipBrokerService.exe" KeyPath="yes" />
+        <ServiceInstall
+            Id="UsbipBrokerServiceInstall"
+            Type="ownProcess"
+            Vital="yes"
+            Name="UsbipBrokerCpp"
+            DisplayName="USB/IP Broker C++"
+            Description="Attaches USB/IP devices exported by Linux thin clients."
+            Start="auto"
+            ErrorControl="normal"
+            Arguments="&quot;[DATADIR]config.ini&quot;" />
+        <ServiceControl
+            Id="UsbipBrokerServiceControl"
+            Name="UsbipBrokerCpp"
+            Start="install"
+            Stop="both"
+            Remove="uninstall"
+            Wait="yes" />
+        <fire:FirewallException
+            Id="UsbipBrokerEventFirewall"
+            Name="USB/IP Broker C++ Event Listener"
+            Port="[EVENTPORT]"
+            Protocol="tcp" />
+      </Component>
+
+      <Component Id="DriverPackageComponent" Directory="DRIVERDIR" Guid="5D4D75E7-4E19-4D3B-ABEC-AE5D4784911D">
+        <File Id="WinUsbInf" Source="$(var.SourceRoot)\drivers\usbip-winusb.inf" KeyPath="yes" />
+      </Component>
+
+      <Component Id="ConfigComponent" Directory="DATADIR" Guid="A671E2E6-0B71-4B7E-BF93-DB055B04E97E">
+        <CreateFolder />
+        <IniFile Id="CfgUsbipPath" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="UsbipPath" Value="[USBIPPATH]" />
+        <IniFile Id="CfgThinClients" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="ThinClients" Value="[THINCLIENTS]" />
+        <IniFile Id="CfgAttachPolicy" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AttachPolicy" Value="[ATTACHPOLICY]" />
+        <IniFile Id="CfgAllowedDevices" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AllowedDevices" Value="303a:1001,303a:*,10c4:ea60,1a86:7523,0403:6010,0403:6001" />
+        <IniFile Id="CfgBlockedDevices" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="BlockedDevices" Value="1d6b:*" />
+        <IniFile Id="CfgPollInterval" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="PollIntervalSeconds" Value="[POLLTIME]" />
+        <IniFile Id="CfgCommandTimeout" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="CommandTimeoutSeconds" Value="25" />
+        <IniFile Id="CfgRetryCount" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AttachRetryCount" Value="3" />
+        <IniFile Id="CfgRetryDelay" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AttachRetryDelaySeconds" Value="2" />
+        <IniFile Id="CfgLogPath" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="LogPath" Value="[DATADIR]logs\broker.log" />
+        <IniFile Id="CfgStatePath" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="StatePath" Value="[DATADIR]state.txt" />
+        <IniFile Id="CfgAuditLogPath" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AuditLogPath" Value="[DATADIR]logs\audit.csv" />
+        <IniFile Id="CfgEventsEnabled" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Events" Key="Enabled" Value="1" />
+        <IniFile Id="CfgEventsPort" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Events" Key="Port" Value="[EVENTPORT]" />
+        <IniFile Id="CfgWinUsbEnabled" Action="addLine" Directory="DATADIR" Name="config.ini" Section="WinUSB" Key="Enabled" Value="1" />
+        <IniFile Id="CfgWinUsbDefaultInf" Action="addLine" Directory="DATADIR" Name="config.ini" Section="WinUSB" Key="DefaultDriverInf" Value="[INSTALLFOLDER]drivers\usbip-winusb.inf" />
+        <IniFile Id="CfgWinUsbSettle" Action="addLine" Directory="DATADIR" Name="config.ini" Section="WinUSB" Key="SettleSeconds" Value="3" />
+        <IniFile Id="CfgWinUsbRetryCount" Action="addLine" Directory="DATADIR" Name="config.ini" Section="WinUSB" Key="RetryCount" Value="2" />
+        <IniFile Id="CfgWinUsbRules" Action="addLine" Directory="DATADIR" Name="config.ini" Section="WinUSB" Key="Rules" Value="ESP32S3_NATIVE_JTAG,ESP_PROG_FT2232_JTAG" />
+        <IniFile Id="CfgWinUsbEsp32Desc" Action="addLine" Directory="DATADIR" Name="config.ini" Section="WinUSB.ESP32S3_NATIVE_JTAG" Key="Description" Value="ESP32-S3 native USB Serial/JTAG - JTAG interface" />
+        <IniFile Id="CfgWinUsbEsp32Pattern" Action="addLine" Directory="DATADIR" Name="config.ini" Section="WinUSB.ESP32S3_NATIVE_JTAG" Key="Pattern" Value="USB\VID_303A&amp;PID_1001&amp;MI_02*" />
+        <IniFile Id="CfgWinUsbEspProgDesc" Action="addLine" Directory="DATADIR" Name="config.ini" Section="WinUSB.ESP_PROG_FT2232_JTAG" Key="Description" Value="ESP-PROG FT2232H channel A - JTAG/OpenOCD" />
+        <IniFile Id="CfgWinUsbEspProgPattern" Action="addLine" Directory="DATADIR" Name="config.ini" Section="WinUSB.ESP_PROG_FT2232_JTAG" Key="Pattern" Value="USB\VID_0403&amp;PID_6010&amp;MI_00*" />
+      </Component>
+
+      <Component Id="LogDirectoryComponent" Directory="LOGDIR" Guid="99BF5D29-9E94-4E0D-A3F3-E5D7B2239396">
+        <CreateFolder />
+      </Component>
+
+      <!-- ── System Tray Monitor (Flutter) ───────────────────────────────── -->
+      <Component Id="TrayMonitorComponent" Directory="TRAYDIR" Guid="B8F4A21D-6C3E-4D9A-A823-C741E5D89F12">
+        <File Id="TrayMonitorExe"
+              Source="$(var.TrayDir)\usbip_monitor.exe"
+              KeyPath="yes" />
+      </Component>
+
+      <!-- DLLs raiz do Flutter -->
+      <Component Id="TrayMonitorDllsComponent" Directory="TRAYDIR" Guid="D3A59B6E-1F7C-4E2B-B034-A8D621C4F897">
+        <File Id="FlutterDll"            Source="$(var.TrayDir)\flutter_windows.dll" />
+        <File Id="ScreenRetrieverDll"    Source="$(var.TrayDir)\screen_retriever_windows_plugin.dll" />
+        <File Id="TrayManagerDll"        Source="$(var.TrayDir)\tray_manager_plugin.dll" />
+        <File Id="WindowManagerDll"      Source="$(var.TrayDir)\window_manager_plugin.dll" />
+      </Component>
+
+      <!-- data\ -->
+      <Component Id="TrayDataComponent" Directory="TRAYDATADIR" Guid="C1E47FA2-83DB-4B6C-AA12-D05E8F3C7B91">
+        <CreateFolder />
+        <File Id="TrayAppSo"    Source="$(var.TrayDir)\data\app.so" />
+        <File Id="TrayIcuDat"   Source="$(var.TrayDir)\data\icudtl.dat" />
+      </Component>
+
+      <!-- data\flutter_assets\ -->
+      <Component Id="TrayAssetsComponent" Directory="TRAYASSETSDIR" Guid="F2B589D3-94AC-4E7F-BC23-E16F90A4D852">
+        <CreateFolder />
+        <File Id="AssetManifest"      Source="$(var.TrayDir)\data\flutter_assets\AssetManifest.bin" />
+        <File Id="FontManifest"       Source="$(var.TrayDir)\data\flutter_assets\FontManifest.json" />
+        <File Id="NativeAssetsManifest" Source="$(var.TrayDir)\data\flutter_assets\NativeAssetsManifest.json" />
+        <File Id="NoticesZ"           Source="$(var.TrayDir)\data\flutter_assets\NOTICES.Z" />
+      </Component>
+
+      <!-- data\flutter_assets\fonts\ -->
+      <Component Id="TrayFontsComponent" Directory="TRAYFONTSDIR" Guid="A7D61CE4-05BF-4A8D-9E34-B82C71F5E963">
+        <CreateFolder />
+        <File Id="MaterialIconsOtf" Source="$(var.TrayDir)\data\flutter_assets\fonts\MaterialIcons-Regular.otf" />
+      </Component>
+
+      <!-- data\flutter_assets\shaders\ -->
+      <Component Id="TrayFxComponent" Directory="TRAYFXDIR" Guid="E85D2AF0-17C3-4F6B-BD45-9C03D72A6E14">
+        <CreateFolder />
+        <File Id="ShaderInkSparkle"    Source="$(var.TrayDir)\data\flutter_assets\shaders\ink_sparkle.frag" />
+        <File Id="ShaderStretchEffect" Source="$(var.TrayDir)\data\flutter_assets\shaders\stretch_effect.frag" />
+      </Component>
+
+      <!-- Entrada de auto-start na bandeja (HKLM – todos os usuários) -->
+      <Component Id="TrayAutoStartComponent" Directory="TRAYDIR" Guid="E6C837A9-2D14-4F8B-9C56-B0F23E7A1D45" Condition="AUTOSTARTTRAY = &quot;1&quot;">
+        <CreateFolder />
+        <RegistryValue
+            Root="HKLM"
+            Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+            Name="UsbipMonitor"
+            Type="string"
+            Value="[TRAYDIR]usbip_monitor.exe"
+            KeyPath="yes"
+            Action="write" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+</Wix>
