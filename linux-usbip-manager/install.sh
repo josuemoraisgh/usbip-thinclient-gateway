@@ -478,14 +478,12 @@ write_services() {
   manager_monitor="${INSTALL_DIR}/usbip_manager --config ${CONFIG_FILE} monitor"
   manager_event="${INSTALL_DIR}/usbip_manager --config ${CONFIG_FILE} event --busid %I"
 
-  # Detect whether this usbipd supports --daemon/-D (creates a PID file and forks).
-  # Newer Armbian/upstream builds removed the fork mode; use Type=simple in that case.
+  # Force Type=simple (no -D). Even when usbipd --help lists -D, the fork
+  # implementation in newer builds is broken (does not write a usable PID file
+  # and hangs systemd until TimeoutStartSec). Type=simple works on all known
+  # versions and is supervised correctly.
   local usbipd_type="simple"
   local usbipd_args="-4"
-  if "${usbipd_bin}" --help 2>&1 | grep -qE -- '(-D|--daemon)'; then
-    usbipd_type="forking"
-    usbipd_args="-D -4"
-  fi
 
   {
     cat <<EOF
@@ -499,7 +497,6 @@ Type=${usbipd_type}
 ExecStartPre=${modprobe_bin} -a usbip-core usbip-host
 ExecStart=${usbipd_bin} ${usbipd_args}
 EOF
-    [[ "${usbipd_type}" == "forking" ]] && echo "PIDFile=/run/usbipd.pid"
     cat <<'EOF'
 Restart=on-failure
 RestartSec=2s
