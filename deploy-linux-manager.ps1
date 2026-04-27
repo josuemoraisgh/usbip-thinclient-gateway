@@ -192,8 +192,8 @@ function Invoke-SSH {
     param([string]$IP, [string]$Pwd, [string]$Command, [int]$TimeoutSec = 120)
     $args = @(
         "-ssh", "-pw", $Pwd,
-        "-batch",                  # nao pede confirmacao de host key na 1a conexao
-        "-o", "StrictHostKeyChecking=no",
+        "-batch",
+        "-hostkey", "*",
         "root@${IP}",
         $Command
     )
@@ -214,7 +214,7 @@ function Invoke-SCP {
     $args = @(
         "-pw", $Pwd,
         "-batch",
-        "-o", "StrictHostKeyChecking=no",
+        "-hostkey", "*",
         "-r",
         $LocalPath,
         "root@${IP}:${RemotePath}"
