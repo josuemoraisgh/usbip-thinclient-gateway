@@ -20,6 +20,6 @@ Write-Host "[1/3] Executando diagnóstico remoto em $Host..."
 Write-Host "[2/3] Baixando diag.txt para $LocalDir..."
 
  # Baixa o arquivo diag.txt
-& $pscp -pw $Password "$User@$Host:'$RemoteDir/diag.txt'" "$LocalDir\diag-$Host.txt"
+& $pscp -pw $Password ($User + "@" + $Host + ":" + $RemoteDir + "/diag.txt") ($LocalDir + "\diag-" + $Host + ".txt")
 
 Write-Host "[3/3] Diagnóstico salvo em $LocalDir\diag-$Host.txt"
