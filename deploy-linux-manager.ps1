@@ -193,9 +193,10 @@ function Accept-HostKey {
     # Usa 'cmd /c echo y | plink' porque com -pw informado o plink nao
     # le senha do stdin -- somente o prompt de host key consome o 'y'.
     # NAO usar -batch aqui: batch rejeita chaves nao cacheadas.
+    # Redireciona stderr para nul para nao poluir a tela quando senha falha.
     param([string]$IP, [string]$Pwd)
-    $cmdLine = "echo y | `"$plink`" -ssh -pw `"$Pwd`" `"root@${IP}`" `"echo ok`""
-    & cmd.exe /c $cmdLine 2>&1 | Out-Null
+    $cmdLine = "echo y | `"$plink`" -ssh -pw `"$Pwd`" `"root@${IP}`" `"echo ok`" 1>nul 2>nul"
+    & cmd.exe /c $cmdLine | Out-Null
 }
 
 function Invoke-SSH {
