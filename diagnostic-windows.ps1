@@ -18,7 +18,7 @@ Write-Host "[0/3] Enviando diagnostic.sh para $Target..."
 & $pscp -pw $Password "linux-usbip-manager/diagnostic.sh" ($User + "@" + $Target + ":" + $RemoteDir + "/diagnostic.sh")
 
 Write-Host "[1/3] Executando diagnóstico remoto em $Target..."
-& $plink -ssh -pw $Password $User@$Target "cd $RemoteDir && tr -d '\r' < diagnostic.sh > diagnostic.sh.lf && mv diagnostic.sh.lf diagnostic.sh && chmod +x diagnostic.sh && sudo bash diagnostic.sh" | Out-Null
+& $plink -ssh -pw $Password $User@$Target "cd $RemoteDir && tr -d '\r' < diagnostic.sh > diagnostic.sh.lf && mv diagnostic.sh.lf diagnostic.sh && chmod +x diagnostic.sh && sudo bash diagnostic.sh > diag.txt 2>&1" | Out-Null
 
 Write-Host "[2/3] Baixando diag.txt para $LocalDir..."
 & $pscp -pw $Password ($User + "@" + $Target + ":" + $RemoteDir + "/diag.txt") ($LocalDir + "\diag-" + $Target + ".txt")
