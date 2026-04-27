@@ -241,9 +241,9 @@ function Show-Result {
 
 $results = @{}
 
-foreach ($host in $hosts) {
-    $ip  = $host.IP
-    $pwd = $host.Password
+foreach ($node in $hosts) {
+    $ip  = $node.IP
+    $pwd = $node.Password
 
     Write-Header "[$ip]"
 
