@@ -13,14 +13,14 @@ param(
 $plink = "C:\Program Files\PuTTY\plink.exe"
 $pscp  = "C:\Program Files\PuTTY\pscp.exe"
 
-Write-Host "[1/3] Executando diagnóstico remoto em $Target..."
+Write-Host "[0/3] Enviando diagnostic.sh para $Target..."
+& $plink -ssh -pw $Password $User@$Target "mkdir -p $RemoteDir" | Out-Null
+& $pscp -pw $Password diagnostic.sh ($User + "@" + $Target + ":" + $RemoteDir + "/diagnostic.sh")
 
-# Executa o script de diagnóstico remoto
+Write-Host "[1/3] Executando diagnóstico remoto em $Target..."
 & $plink -ssh -pw $Password $User@$Target "cd $RemoteDir && chmod +x diagnostic.sh && sudo bash diagnostic.sh" | Out-Null
 
 Write-Host "[2/3] Baixando diag.txt para $LocalDir..."
-
-# Baixa o arquivo diag.txt
 & $pscp -pw $Password ($User + "@" + $Target + ":" + $RemoteDir + "/diag.txt") ($LocalDir + "\diag-" + $Target + ".txt")
 
 Write-Host "[3/3] Diagnóstico salvo em $LocalDir\diag-$Target.txt"
