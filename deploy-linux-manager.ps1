@@ -189,11 +189,23 @@ if (-not $Force) {
 # ─── Funções SSH / SCP ────────────────────────────────────────────────────────
 
 function Accept-HostKey {
-    # Aceita e salva a host key silenciosamente (sem stdin).
-    # -acceptnew: aceita automaticamente chaves novas (PuTTY >= 0.73).
-    # NAO usar -batch aqui: batch rejeita chaves nao cacheadas.
+    # Aceita e salva a host key na primeira conexao.
+    # Versoes antigas do plink nao suportam -acceptnew, entao enviamos 'y'
+    # via Start-Process -RedirectStandardInput a partir de um arquivo temp.
     param([string]$IP, [string]$Pwd)
-    $null = & $plink -ssh -pw $Pwd -acceptnew "root@${IP}" "echo ok" 2>&1
+    $stdinFile = Join-Path $env:TEMP "plink_y_${IP}.txt"
+    "y`r`n"  | Set-Content -LiteralPath $stdinFile -NoNewline -Encoding ASCII
+
+    $argsAccept = @("-ssh", "-pw", $Pwd, "root@${IP}", "echo ok")
+    Start-Process -FilePath $plink -ArgumentList $argsAccept `
+        -Wait -NoNewWindow `
+        -RedirectStandardInput  $stdinFile `
+        -RedirectStandardOutput "$env:TEMP\plink_acc_out_${IP}.txt" `
+        -RedirectStandardError  "$env:TEMP\plink_acc_err_${IP}.txt" 2>$null | Out-Null
+
+    Remove-Item $stdinFile,
+                "$env:TEMP\plink_acc_out_${IP}.txt",
+                "$env:TEMP\plink_acc_err_${IP}.txt" -ErrorAction SilentlyContinue
 }
 
 function Invoke-SSH {
