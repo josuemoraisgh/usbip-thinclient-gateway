@@ -190,22 +190,12 @@ if (-not $Force) {
 
 function Accept-HostKey {
     # Aceita e salva a host key na primeira conexao.
-    # Versoes antigas do plink nao suportam -acceptnew, entao enviamos 'y'
-    # via Start-Process -RedirectStandardInput a partir de um arquivo temp.
+    # Usa 'cmd /c echo y | plink' porque com -pw informado o plink nao
+    # le senha do stdin -- somente o prompt de host key consome o 'y'.
+    # NAO usar -batch aqui: batch rejeita chaves nao cacheadas.
     param([string]$IP, [string]$Pwd)
-    $stdinFile = Join-Path $env:TEMP "plink_y_${IP}.txt"
-    "y`r`n"  | Set-Content -LiteralPath $stdinFile -NoNewline -Encoding ASCII
-
-    $argsAccept = @("-ssh", "-pw", $Pwd, "root@${IP}", "echo ok")
-    Start-Process -FilePath $plink -ArgumentList $argsAccept `
-        -Wait -NoNewWindow `
-        -RedirectStandardInput  $stdinFile `
-        -RedirectStandardOutput "$env:TEMP\plink_acc_out_${IP}.txt" `
-        -RedirectStandardError  "$env:TEMP\plink_acc_err_${IP}.txt" 2>$null | Out-Null
-
-    Remove-Item $stdinFile,
-                "$env:TEMP\plink_acc_out_${IP}.txt",
-                "$env:TEMP\plink_acc_err_${IP}.txt" -ErrorAction SilentlyContinue
+    $cmdLine = "echo y | `"$plink`" -ssh -pw `"$Pwd`" `"root@${IP}`" `"echo ok`""
+    & cmd.exe /c $cmdLine 2>&1 | Out-Null
 }
 
 function Invoke-SSH {
