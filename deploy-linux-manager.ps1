@@ -298,7 +298,45 @@ foreach ($node in $hosts) {
     $normalizeCmd = "for f in '$RemoteDir'/*.sh; do sed -i 's/\r$//' `"`$f`"; done; chmod +x '$RemoteDir'/*.sh '$RemoteDir'/bin/* 2>/dev/null || true"
     Invoke-SSH -IP $ip -Pwd $pwd -Command $normalizeCmd | Out-Null
 
-    # 3. Desinstalar (opcional)
+
+    # 3. Limpeza completa do usbipd antigo e serviço systemd
+    Write-Step "Removendo serviço usbipd antigo, matando processos e limpando arquivos..."
+    $cleanupScript = @'
+sudo systemctl stop usbipd 2>/dev/null || true
+sudo systemctl disable usbipd 2>/dev/null || true
+sudo pkill usbipd 2>/dev/null || true
+sudo kill -9 $(pgrep usbipd) 2>/dev/null || true
+sudo rm -f /etc/systemd/system/usbipd.service
+sudo rm -f /lib/systemd/system/usbipd.service
+sudo systemctl daemon-reload
+sudo rm -f /usr/sbin/usbipd /usr/sbin/usbip
+sudo modprobe -r usbip_host 2>/dev/null || true
+sudo modprobe -r usbip_core 2>/dev/null || true
+sudo apt-get update -y
+sudo apt-get install -y usbip usbip-utils
+if [ ! -f /etc/systemd/system/usbipd.service ] && [ ! -f /lib/systemd/system/usbipd.service ]; then
+  cat <<EOF | sudo tee /etc/systemd/system/usbipd.service
+[Unit]
+Description=USB/IP export daemon
+After=network.target
+
+[Service]
+ExecStartPre=/usr/sbin/modprobe -a usbip-core usbip-host
+ExecStart=/usr/sbin/usbipd -4
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  sudo systemctl daemon-reload
+  sudo systemctl enable usbipd
+  sudo systemctl start usbipd
+fi
+'@
+    $cleanupResult = Invoke-SSH -IP $ip -Pwd $pwd -Command "/bin/bash -c \"$cleanupScript\"" -TimeoutSec 180
+    Show-Result $cleanupResult "cleanup"
+
+    # 3b. Desinstalar (opcional)
     if (-not $SkipUninstall) {
         Write-Step "Executando uninstall.sh..."
         $uninstArgs = "--force"
