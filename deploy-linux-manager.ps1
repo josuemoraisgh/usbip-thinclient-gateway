@@ -289,8 +289,9 @@ foreach ($node in $hosts) {
     }
     Write-OK "Upload concluido"
 
-    # Tornar scripts executaveis
-    Invoke-SSH -IP $ip -Pwd $pwd -Command "chmod +x '$RemoteDir'/*.sh '$RemoteDir'/bin/* 2>/dev/null || true" | Out-Null
+    # Normalizar line endings (CRLF -> LF) e tornar scripts executaveis
+    $normalizeCmd = "for f in '$RemoteDir'/*.sh; do sed -i 's/\r$//' `"`$f`"; done; chmod +x '$RemoteDir'/*.sh '$RemoteDir'/bin/* 2>/dev/null || true"
+    Invoke-SSH -IP $ip -Pwd $pwd -Command $normalizeCmd | Out-Null
 
     # 3. Desinstalar (opcional)
     if (-not $SkipUninstall) {
