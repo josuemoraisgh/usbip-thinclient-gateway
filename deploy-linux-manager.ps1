@@ -259,7 +259,7 @@ foreach ($host in $hosts) {
     Write-OK "SSH OK"
 
     # 2. Upload dos arquivos
-    Write-Step "Enviando linux-usbip-manager/ para $ip:$RemoteDir ..."
+    Write-Step "Enviando linux-usbip-manager/ para ${ip}:$RemoteDir ..."
     $sshMkdir = Invoke-SSH -IP $ip -Pwd $pwd -Command "rm -rf '$RemoteDir' ; mkdir -p '$RemoteDir'"
     if ($sshMkdir.ExitCode -ne 0) {
         Write-Fail "Erro ao criar diretorio remoto."
@@ -290,7 +290,7 @@ foreach ($host in $hosts) {
             -TimeoutSec 60
         Show-Result $uninstResult "uninstall"
         if ($uninstResult.ExitCode -ne 0) {
-            Write-Warn "uninstall.sh retornou exit $($uninstResult.ExitCode) — continuando mesmo assim."
+            Write-Warn "uninstall.sh retornou exit $($uninstResult.ExitCode) - continuando mesmo assim."
         } else {
             Write-OK "Desinstalacao concluida"
         }
@@ -333,7 +333,7 @@ foreach ($entry in $results.GetEnumerator() | Sort-Object Name) {
 }
 
 Write-Host ""
-Write-Host "  Total: $($hosts.Count)  |  Sucesso: $ok  |  Falha: $fail"
+Write-Host ("  Total: " + $hosts.Count + "  |  Sucesso: $ok  |  Falha: $fail")
 Write-Host ""
 
 if ($fail -gt 0) { exit 1 } else { exit 0 }
