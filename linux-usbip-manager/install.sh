@@ -478,23 +478,37 @@ write_services() {
   manager_monitor="${INSTALL_DIR}/usbip_manager --config ${CONFIG_FILE} monitor"
   manager_event="${INSTALL_DIR}/usbip_manager --config ${CONFIG_FILE} event --busid %I"
 
-  cat > "${SYSTEMD_DIR}/usbipd.service" <<EOF
+  # Detect whether this usbipd supports --daemon/-D (creates a PID file and forks).
+  # Newer Armbian/upstream builds removed the fork mode; use Type=simple in that case.
+  local usbipd_type="simple"
+  local usbipd_args="-4"
+  if "${usbipd_bin}" --help 2>&1 | grep -qE -- '(-D|--daemon)'; then
+    usbipd_type="forking"
+    usbipd_args="-D -4"
+  fi
+
+  {
+    cat <<EOF
 [Unit]
 Description=USB/IP export daemon
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=forking
+Type=${usbipd_type}
 ExecStartPre=${modprobe_bin} -a usbip-core usbip-host
-ExecStart=${usbipd_bin} -D -4
-PIDFile=/run/usbipd.pid
+ExecStart=${usbipd_bin} ${usbipd_args}
+EOF
+    [[ "${usbipd_type}" == "forking" ]] && echo "PIDFile=/run/usbipd.pid"
+    cat <<'EOF'
 Restart=on-failure
 RestartSec=2s
+TimeoutStartSec=30
 
 [Install]
 WantedBy=multi-user.target
 EOF
+  } > "${SYSTEMD_DIR}/usbipd.service"
 
   cat > "${SYSTEMD_DIR}/usbip-manager.service" <<EOF
 [Unit]

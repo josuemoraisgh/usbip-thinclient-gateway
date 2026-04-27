@@ -59,7 +59,6 @@
 
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="UsbipSuite">
-        <Directory Id="DRIVERDIR" Name="drivers" />
         <Directory Id="TRAYDIR" Name="monitor">
           <Directory Id="TRAYDATADIR" Name="data">
             <Directory Id="TRAYASSETSDIR" Name="flutter_assets">
@@ -110,16 +109,12 @@
             Protocol="tcp" />
       </Component>
 
-      <Component Id="DriverPackageComponent" Directory="DRIVERDIR" Guid="5D4D75E7-4E19-4D3B-ABEC-AE5D4784911D">
-        <File Id="WinUsbInf" Source="$(var.SourceRoot)\drivers\usbip-winusb.inf" KeyPath="yes" />
-      </Component>
-
       <Component Id="ConfigComponent" Directory="DATADIR" Guid="A671E2E6-0B71-4B7E-BF93-DB055B04E97E">
         <CreateFolder />
         <IniFile Id="CfgUsbipPath" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="UsbipPath" Value="[USBIPPATH]" />
         <IniFile Id="CfgThinClients" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="ThinClients" Value="[THINCLIENTS]" />
         <IniFile Id="CfgAttachPolicy" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AttachPolicy" Value="[ATTACHPOLICY]" />
-        <IniFile Id="CfgAllowedDevices" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AllowedDevices" Value="303a:1001,303a:*,10c4:ea60,1a86:7523,0403:6010,0403:6001" />
+        <IniFile Id="CfgAllowedDevices" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AllowedDevices" Value="303a:1001,303a:*,10c4:ea60,1a86:7523,0403:6001" />
         <IniFile Id="CfgBlockedDevices" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="BlockedDevices" Value="1d6b:*" />
         <IniFile Id="CfgPollInterval" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="PollIntervalSeconds" Value="[POLLTIME]" />
         <IniFile Id="CfgCommandTimeout" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="CommandTimeoutSeconds" Value="25" />
@@ -130,15 +125,6 @@
         <IniFile Id="CfgAuditLogPath" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AuditLogPath" Value="[DATADIR]logs\audit.csv" />
         <IniFile Id="CfgEventsEnabled" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Events" Key="Enabled" Value="1" />
         <IniFile Id="CfgEventsPort" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Events" Key="Port" Value="[EVENTPORT]" />
-        <IniFile Id="CfgWinUsbEnabled" Action="addLine" Directory="DATADIR" Name="config.ini" Section="WinUSB" Key="Enabled" Value="1" />
-        <IniFile Id="CfgWinUsbDefaultInf" Action="addLine" Directory="DATADIR" Name="config.ini" Section="WinUSB" Key="DefaultDriverInf" Value="[INSTALLFOLDER]drivers\usbip-winusb.inf" />
-        <IniFile Id="CfgWinUsbSettle" Action="addLine" Directory="DATADIR" Name="config.ini" Section="WinUSB" Key="SettleSeconds" Value="3" />
-        <IniFile Id="CfgWinUsbRetryCount" Action="addLine" Directory="DATADIR" Name="config.ini" Section="WinUSB" Key="RetryCount" Value="2" />
-        <IniFile Id="CfgWinUsbRules" Action="addLine" Directory="DATADIR" Name="config.ini" Section="WinUSB" Key="Rules" Value="ESP32S3_NATIVE_JTAG,ESP_PROG_FT2232_JTAG" />
-        <IniFile Id="CfgWinUsbEsp32Desc" Action="addLine" Directory="DATADIR" Name="config.ini" Section="WinUSB.ESP32S3_NATIVE_JTAG" Key="Description" Value="ESP32-S3 native USB Serial/JTAG - JTAG interface" />
-        <IniFile Id="CfgWinUsbEsp32Pattern" Action="addLine" Directory="DATADIR" Name="config.ini" Section="WinUSB.ESP32S3_NATIVE_JTAG" Key="Pattern" Value="USB\VID_303A&amp;PID_1001&amp;MI_02*" />
-        <IniFile Id="CfgWinUsbEspProgDesc" Action="addLine" Directory="DATADIR" Name="config.ini" Section="WinUSB.ESP_PROG_FT2232_JTAG" Key="Description" Value="ESP-PROG FT2232H channel A - JTAG/OpenOCD" />
-        <IniFile Id="CfgWinUsbEspProgPattern" Action="addLine" Directory="DATADIR" Name="config.ini" Section="WinUSB.ESP_PROG_FT2232_JTAG" Key="Pattern" Value="USB\VID_0403&amp;PID_6010&amp;MI_00*" />
       </Component>
 
       <Component Id="LogDirectoryComponent" Directory="LOGDIR" Guid="99BF5D29-9E94-4E0D-A3F3-E5D7B2239396">
@@ -190,7 +176,7 @@
       </Component>
 
       <!-- Entrada de auto-start na bandeja (HKLM – todos os usuários) -->
-      <Component Id="TrayAutoStartComponent" Directory="TRAYDIR" Guid="E6C837A9-2D14-4F8B-9C56-B0F23E7A1D45" Condition="AUTOSTARTTRAY = &quot;1&quot;">
+      <Component Id="TrayAutoStartComponent" Directory="TRAYDIR" Guid="E6C837A9-2D14-4F8B-9C56-B0F23E7A1D45">
         <CreateFolder />
         <RegistryValue
             Root="HKLM"

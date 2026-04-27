@@ -1,7 +1,176 @@
-# Windows (rodar como Administrador)
-.\windows-cleanup.ps1
-msiexec /i .\windows-usbip-broker-cpp\build\UsbipSuite-2.0.0-x64.msi
+# USB/IP ThinClient Gateway
 
-# Linux (em cada thin client, rodar como root)
-sudo ./linux-usbip-manager/uninstall.sh
-sudo ./linux-usbip-manager/install.sh
+Sistema completo para exportar dispositivos USB de thin clients Linux e importá-los automaticamente no Windows Server via USB/IP.
+
+## Componentes
+
+| Componente | Diretório | Descrição |
+|---|---|---|
+| **Broker C++** | `windows-usbip-broker-cpp/` | Serviço Windows que conecta nas thin clients e anexa os dispositivos USB/IP |
+| **Monitor de bandeja** | `windows-tray-monitor/` | App Flutter (system tray) que exibe a relação COM × estação em tempo real |
+| **Manager Linux** | `linux-usbip-manager/` | Daemon C++ nas thin clients que exporta os dispositivos via `usbipd` |
+| **MSI unificado** | `windows-usbip-broker-cpp/build/` | Instalador que entrega o broker + monitor de bandeja em uma única etapa |
+
+---
+
+## Instalação rápida
+
+### 1. Windows Server
+
+**Pré-requisito:** `usbip.exe` (usbip-win) instalado — ex.: `C:\usbip\usbip.exe`.
+
+```powershell
+# (Administrador) — limpa instalações antigas
+.\windows-cleanup.ps1
+
+# Instala o broker e o monitor de bandeja
+msiexec /i "windows-usbip-broker-cpp\build\UsbipSuite-2.0.0-x64.msi" `
+    THINCLIENTS="192.168.100.31,192.168.100.32" `
+    USBIPPATH="C:\usbip\usbip.exe"
+```
+
+O assistente de instalação também pode ser aberto com duplo clique no `.msi`.
+
+### 2. Thin clients Linux (deploy remoto a partir do Windows Server)
+
+O script `deploy-linux-manager.ps1` acessa cada thin client via SSH, faz upload dos arquivos, executa o `uninstall.sh` e depois o `install.sh` automaticamente.
+
+**Pré-requisito:** PuTTY instalado no Windows Server.
+
+```powershell
+winget install PuTTY.PuTTY
+```
+
+#### Opção A — Mesma senha para todas as thin clients
+
+```powershell
+.\deploy-linux-manager.ps1 `
+    -ThinClients "192.168.100.31","192.168.100.32","192.168.100.33" `
+    -Password "senha_root" `
+    -ServerIP "192.168.100.10"
+```
+
+#### Opção B — Senhas diferentes por host (arquivo CSV)
+
+Copie `hosts.example.csv` para `hosts.csv`, edite os IPs e senhas:
+
+```
+192.168.100.31,senha_estacao01
+192.168.100.32,senha_estacao02
+```
+
+```powershell
+.\deploy-linux-manager.ps1 -ConfigFile .\hosts.csv -ServerIP "192.168.100.10"
+```
+
+#### Opção C — Apenas reinstalar sem apagar configuração
+
+```powershell
+.\deploy-linux-manager.ps1 `
+    -ThinClients "192.168.100.31" `
+    -KeepConfig `
+    -Force
+```
+
+#### Parâmetros do deploy
+
+| Parâmetro | Descrição | Padrão |
+|---|---|---|
+| `-ThinClients` | Lista de IPs das thin clients | — |
+| `-Password` | Senha root (igual para todos) | Pedida interativamente |
+| `-ConfigFile` | CSV `ip,senha` para senhas diferentes por host | — |
+| `-ServerIP` | IP do Windows Server (repassado ao `install.sh`) | Detectado automaticamente |
+| `-NotifyPort` | Porta TCP do broker Windows | `12000` |
+| `-SkipUninstall` | Pula o `uninstall.sh` (somente instala/atualiza) | `false` |
+| `-KeepConfig` | Passa `--keep-config` ao `uninstall.sh` | `false` |
+| `-Force` | Não pede confirmação antes de iniciar | `false` |
+
+#### O que o script faz em cada thin client
+
+1. Testa conexão SSH
+2. Faz upload de `linux-usbip-manager/` via SCP para `/tmp/usbip-deploy`
+3. Executa `uninstall.sh --force` (opcional)
+4. Executa `install.sh --server-ip <IP> --notify-host <IP> --notify-port <PORTA>`
+5. Remove os arquivos temporários remotos
+6. Exibe resumo de sucesso/falha por IP
+
+### 3. Thin clients Linux (manual)
+
+```bash
+# Em cada thin client, como root
+sudo bash ./linux-usbip-manager/uninstall.sh --force
+sudo bash ./linux-usbip-manager/install.sh --server-ip 192.168.100.10
+```
+
+---
+
+## Atualização / limpeza
+
+### Windows
+
+```powershell
+# Remove serviço antigo, MSI anterior, processos e entradas de registro
+.\windows-cleanup.ps1
+
+# Com -KeepData preserva C:\ProgramData\UsbipBroker (dados do broker Python legado)
+.\windows-cleanup.ps1 -KeepData
+```
+
+### Linux
+
+```bash
+# Remove completamente (mantendo config.json)
+sudo bash ./linux-usbip-manager/uninstall.sh --keep-config
+
+# Remove tudo incluindo configuração
+sudo bash ./linux-usbip-manager/uninstall.sh --force
+```
+
+---
+
+## Build
+
+### Compilar tudo e gerar o MSI
+
+```powershell
+# Requer: Visual Studio Build Tools (C++), Flutter SDK, WiX Toolset v6
+cd windows-usbip-broker-cpp
+.\build.ps1
+```
+
+Etapas do build:
+
+1. `flutter build windows --release` em `windows-tray-monitor/`
+2. Compilação C++ do `UsbipBrokerService.exe`
+3. Empacotamento WiX → `build\UsbipSuite-2.0.0-x64.msi`
+
+Flags opcionais:
+
+```powershell
+.\build.ps1 -SkipFlutter   # pula o build Flutter (usa binário já compilado)
+.\build.ps1 -SkipCpp       # pula a compilação C++
+.\build.ps1 -SkipFlutter -SkipCpp   # apenas regenera o MSI
+```
+
+---
+
+## Trilha de auditoria (COM × estação)
+
+O broker registra cada dispositivo anexado em:
+
+```
+C:\ProgramData\UsbipBrokerCpp\logs\audit.csv
+```
+
+Colunas: `timestamp`, `station`, `host_ip`, `busid`, `vid`, `pid`, `description`, `com_port`
+
+Para configurar os nomes das estações, edite `C:\ProgramData\UsbipBrokerCpp\config.ini`:
+
+```ini
+[Stations]
+192.168.100.31=Estacao-01
+192.168.100.32=Estacao-02
+```
+
+O monitor de bandeja lê esse CSV e exibe a tabela ao clicar no ícone na barra de tarefas.
+
