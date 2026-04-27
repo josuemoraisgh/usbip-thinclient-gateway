@@ -189,12 +189,11 @@ if (-not $Force) {
 # ─── Funções SSH / SCP ────────────────────────────────────────────────────────
 
 function Accept-HostKey {
-    # Aceita a host key na primeira conexão piping 'y' via cmd.
-    # A chave fica salva no registry; conexões -batch seguintes funcionam normalmente.
+    # Aceita e salva a host key silenciosamente (sem stdin).
+    # -acceptnew: aceita automaticamente chaves novas (PuTTY >= 0.73).
+    # NAO usar -batch aqui: batch rejeita chaves nao cacheadas.
     param([string]$IP, [string]$Pwd)
-    $escaped = $Pwd -replace '"', '\"'
-    $cmdLine = "echo y | `"$plink`" -ssh -pw `"$escaped`" root@${IP} echo ok"
-    $null = cmd /c $cmdLine 2>&1
+    $null = & $plink -ssh -pw $Pwd -acceptnew "root@${IP}" "echo ok" 2>&1
 }
 
 function Invoke-SSH {
