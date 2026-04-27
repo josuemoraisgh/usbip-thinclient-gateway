@@ -188,16 +188,24 @@ if (-not $Force) {
 
 # ─── Funções SSH / SCP ────────────────────────────────────────────────────────
 
+function Accept-HostKey {
+    # Aceita a host key na primeira conexão piping 'y' via cmd.
+    # A chave fica salva no registry; conexões -batch seguintes funcionam normalmente.
+    param([string]$IP, [string]$Pwd)
+    $escaped = $Pwd -replace '"', '\"'
+    $cmdLine = "echo y | `"$plink`" -ssh -pw `"$escaped`" root@${IP} echo ok"
+    $null = cmd /c $cmdLine 2>&1
+}
+
 function Invoke-SSH {
     param([string]$IP, [string]$Pwd, [string]$Command, [int]$TimeoutSec = 120)
-    $args = @(
+    $plinkArgs = @(
         "-ssh", "-pw", $Pwd,
         "-batch",
-        "-hostkey", "*",
         "root@${IP}",
         $Command
     )
-    $proc = Start-Process -FilePath $plink -ArgumentList $args `
+    $proc = Start-Process -FilePath $plink -ArgumentList $plinkArgs `
         -Wait -PassThru -NoNewWindow `
         -RedirectStandardOutput "$env:TEMP\plink_out_${IP}.txt" `
         -RedirectStandardError  "$env:TEMP\plink_err_${IP}.txt"
@@ -211,15 +219,14 @@ function Invoke-SSH {
 
 function Invoke-SCP {
     param([string]$IP, [string]$Pwd, [string]$LocalPath, [string]$RemotePath)
-    $args = @(
+    $scpArgs = @(
         "-pw", $Pwd,
         "-batch",
-        "-hostkey", "*",
         "-r",
         $LocalPath,
         "root@${IP}:${RemotePath}"
     )
-    $proc = Start-Process -FilePath $pscp -ArgumentList $args `
+    $proc = Start-Process -FilePath $pscp -ArgumentList $scpArgs `
         -Wait -PassThru -NoNewWindow `
         -RedirectStandardOutput "$env:TEMP\pscp_out_${IP}.txt" `
         -RedirectStandardError  "$env:TEMP\pscp_err_${IP}.txt"
@@ -246,6 +253,10 @@ foreach ($node in $hosts) {
     $pwd = $node.Password
 
     Write-Header "[$ip]"
+
+    # 0. Aceitar host key (primeira conexao)
+    Write-Step "Aceitando host key SSH..."
+    Accept-HostKey -IP $ip -Pwd $pwd
 
     # 1. Teste de conectividade
     Write-Step "Testando conexao SSH..."
