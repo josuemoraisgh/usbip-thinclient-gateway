@@ -79,13 +79,39 @@ Em cada thin client:
 
 ```bash
 cd linux-usbip-manager
-sudo bash ./install.sh --server-ip 192.168.100.26 --notify-host 192.168.100.26
+sudo bash ./install.sh
+```
+
+O instalador Linux agora assume por padrao o Windows Server `10.0.64.28` para
+`--server-ip` e `--notify-host`, com notificacao na porta TCP 12000.
+Se `usbip` ou `usbipd` nao existirem, ele tenta instalar automaticamente o
+runtime USB/IP do Linux via `apt-get`, exceto quando usado com `--skip-packages`.
+
+Para thin clients com pouco espaco, o pacote Linux tambem aceita um binario C++
+nativo. Este pacote ja inclui `bin/usbip-manager-linux-arm64`:
+
+```text
+SHA256: BD808BBBE20E22B8E1E8A25F8F42CB7C911E7F31A3AC1B81FBAD75819F99C0D9
+```
+
+Se precisar recompilar, use uma maquina Linux/Armbian da mesma arquitetura:
+
+```bash
+cd linux-usbip-manager
+bash ./build-native.sh
+```
+
+Depois copie a pasta para o pendrive. Se existir
+`bin/usbip-manager-linux-arm64`, o instalador usa esse binario C++:
+
+```bash
+sudo bash ./install.sh --skip-packages
 ```
 
 Se quiser exportar somente ESP32-S3 e bridges seriais conhecidas:
 
 ```bash
-sudo bash ./install.sh --server-ip 192.168.100.26 --notify-host 192.168.100.26 --allowlist-only
+sudo bash ./install.sh --allowlist-only
 ```
 
 Validacao:
@@ -94,6 +120,53 @@ Validacao:
 systemctl status usbipd.service usbip-manager.service
 journalctl -u usbip-manager.service -f
 usbip list -l
+```
+
+Se o `install.sh` parar em `apt-get update` com erro de
+`bullseye-backports Release`, o repositório APT do thin client esta obsoleto. A
+versao atual do instalador tenta comentar essa entrada automaticamente e criar
+backup. Para corrigir manualmente:
+
+```bash
+sudo sed -i -E '/bullseye-backports/ s/^/# disabled: /' /etc/apt/sources.list
+sudo find /etc/apt/sources.list.d -name '*.list' -type f -exec sed -i -E '/bullseye-backports/ s/^/# disabled: /' {} \;
+sudo apt-get update --allow-releaseinfo-change
+sudo bash ./install.sh
+```
+
+Se aparecer `Nao foi possivel resolver 'deb.debian.org'` ou
+`Nao foi possivel resolver 'apt.armbian.com'`, o problema e DNS/internet no thin
+client. Correcao rapida para testar:
+
+```bash
+ip route
+ping -c 3 8.8.8.8
+getent hosts deb.debian.org
+printf "nameserver 1.1.1.1\nnameserver 8.8.8.8\n" | sudo tee /etc/resolv.conf
+sudo apt-get update --allow-releaseinfo-change
+sudo bash ./install.sh
+```
+
+Se a internet nao for necessaria agora e os utilitarios USB/IP ja estiverem
+instalados, pule o APT:
+
+```bash
+command -v usbip usbipd modprobe udevadm systemctl
+sudo bash ./install.sh --skip-packages
+```
+
+Se aparecer `Nao ha espaco disponivel no dispositivo`, limpe cache/logs, repare
+o `dpkg` e rode sem APT:
+
+```bash
+df -h / /var /tmp
+sudo apt-get clean
+sudo rm -rf /var/cache/apt/archives/*.deb /var/lib/apt/lists/*
+sudo journalctl --vacuum-size=20M 2>/dev/null || true
+sudo find /var/log -type f -name "*.gz" -delete
+sudo find /var/log -type f -name "*.1" -delete
+sudo dpkg --configure -a
+sudo bash ./install.sh --skip-packages
 ```
 
 ## Fluxo operacional

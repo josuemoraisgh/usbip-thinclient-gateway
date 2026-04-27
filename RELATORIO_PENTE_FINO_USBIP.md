@@ -26,15 +26,21 @@ O caminho recomendado ficou:
 - Adicionada politica WinUSB por `config.ini`, baseada em `Get-PnpDevice` e
   `InstanceId`, para ESP32-S3 e ESP-PROG.
 - Adicionado INF padrao `drivers/usbip-winusb.inf` ao MSI.
+- Adicionado gerenciador Linux nativo C++ para ARM64
+  `linux-usbip-manager/bin/usbip-manager-linux-arm64`.
+- Removido runtime/fallback Python do instalador Linux; o lado Linux agora e
+  C++ only.
 - Removidos artefatos obsoletos do build antigo 1.0.
 - Regerado o MSI final `UsbipSuite-2.0.0-x64.msi`.
 
 ## Validacoes executadas
 
-- Python Linux: `python -m py_compile linux-usbip-manager/usbip_manager.py`
 - JSON Linux: `python -m json.tool linux-usbip-manager/config.example.json`
 - Bash Linux: `bash -n linux-usbip-manager/install.sh`
 - Bash Linux: `bash -n linux-usbip-manager/uninstall.sh`
+- Bash Linux: `bash -n linux-usbip-manager/build-native.sh`
+- C++ Linux ARM64: build OK de `usbip_manager.cpp` para
+  `bin/usbip-manager-linux-arm64`
 - PowerShell: parser OK para `windows-cleanup.ps1`
 - PowerShell: parser OK para `windows-usbip-broker-cpp/build.ps1`
 - Flutter: `flutter analyze` sem issues
@@ -54,10 +60,11 @@ SHA256: C70F9E8B1E532E7E8CEC625A11AC22DB6892A6F106E4A5B01F919176721335DF
 
 ## O que o thin client Linux faz
 
-- Instala dependencias basicas (`python3`, `usbip`, `usbutils`, `hwdata`).
+- Usa gerenciador Linux nativo C++ e depende apenas do runtime USB/IP do Linux
+  (`usbip`, `usbipd` e modulos do kernel).
 - Carrega `usbip-core` e `usbip-host`.
 - Cria `usbipd.service` para exportar USB na porta TCP 3240.
-- Cria `usbip-manager.service`, um daemon Python que reconcilia dispositivos
+- Cria `usbip-manager.service`, um daemon C++ nativo que reconcilia dispositivos
   continuamente.
 - Cria regra `udev` para reagir a insercao/remocao de USB.
 - Usa retry e atraso de estabilizacao para lidar com reenumeracao.
