@@ -111,6 +111,8 @@ Apos instalar, adicione ao PATH ou coloque plink.exe e pscp.exe na mesma pasta d
 Write-OK "plink : $plink"
 Write-OK "pscp  : $pscp"
 
+$script:HostKeyByIP = @{}
+
 # ─── Diretório do linux-usbip-manager ─────────────────────────────────────────
 
 $scriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -188,25 +190,89 @@ if (-not $Force) {
 
 # ─── Funções SSH / SCP ────────────────────────────────────────────────────────
 
+function Safe-TempName {
+    param([string]$Value)
+    return ($Value -replace '[^A-Za-z0-9_.-]', '_')
+}
+
+function Get-HostKeyArgs {
+    param([string]$IP)
+    if ($script:HostKeyByIP.ContainsKey($IP)) {
+        return @("-hostkey", $script:HostKeyByIP[$IP])
+    }
+    return @()
+}
+
+function Invoke-PlinkProbe {
+    param([string]$IP, [string]$Pwd, [string[]]$ExtraArgs = @())
+
+    $safe = Safe-TempName $IP
+    $outFile = Join-Path $env:TEMP "plink_probe_out_${safe}.txt"
+    $errFile = Join-Path $env:TEMP "plink_probe_err_${safe}.txt"
+    Remove-Item $outFile,$errFile -ErrorAction SilentlyContinue
+
+    $args = @(
+        "-ssh", "-pw", $Pwd
+    ) + $ExtraArgs + @(
+        "-batch",
+        "root@${IP}",
+        "echo ok"
+    )
+
+    $proc = Start-Process -FilePath $plink -ArgumentList $args `
+        -Wait -PassThru -NoNewWindow `
+        -RedirectStandardOutput $outFile `
+        -RedirectStandardError  $errFile
+
+    $out = Get-Content $outFile -ErrorAction SilentlyContinue
+    $err = Get-Content $errFile -ErrorAction SilentlyContinue
+    Remove-Item $outFile,$errFile -ErrorAction SilentlyContinue
+
+    return @{ ExitCode = $proc.ExitCode; Stdout = $out; Stderr = $err }
+}
+
 function Accept-HostKey {
-    # Aceita e salva a host key na primeira conexao.
-    # Usa arquivo temp + redirecionamento '<' do cmd, pois pipe '|' as vezes
-    # nao alimenta o plink (ele abre console interativo herdado).
-    # NAO usar -batch aqui: batch rejeita chaves nao cacheadas.
+    # Primeiro tenta conexao em batch. Se a host key ainda nao estiver no cache
+    # do PuTTY, o Plink retorna o fingerprint no stderr; entao reutilizamos esse
+    # SHA256 com -hostkey em todos os comandos seguintes, sem prompt interativo.
     param([string]$IP, [string]$Pwd)
-    $stdinFile = Join-Path $env:TEMP "plink_y_${IP}.txt"
-    "y`r`n" | Set-Content -LiteralPath $stdinFile -NoNewline -Encoding ASCII
 
-    $cmdLine = "`"$plink`" -ssh -pw `"$Pwd`" `"root@${IP}`" `"echo ok`" < `"$stdinFile`" 1>nul 2>nul"
-    & cmd.exe /c $cmdLine | Out-Null
+    if ($script:HostKeyByIP.ContainsKey($IP)) {
+        return $true
+    }
 
-    Remove-Item $stdinFile -ErrorAction SilentlyContinue
+    $probe = Invoke-PlinkProbe -IP $IP -Pwd $Pwd
+    if ($probe.ExitCode -eq 0) {
+        return $true
+    }
+
+    $text = (($probe.Stdout + $probe.Stderr) -join "`n")
+    $match = [regex]::Match($text, 'SHA256:[A-Za-z0-9+/=]+')
+    if (-not $match.Success) {
+        Write-Warn "Nao foi possivel detectar fingerprint da host key de $IP."
+        Show-Result $probe "hostkey"
+        return $false
+    }
+
+    $fingerprint = $match.Value
+    $script:HostKeyByIP[$IP] = $fingerprint
+
+    $verify = Invoke-PlinkProbe -IP $IP -Pwd $Pwd -ExtraArgs (Get-HostKeyArgs -IP $IP)
+    if ($verify.ExitCode -ne 0) {
+        Write-Warn "Fingerprint detectado ($fingerprint), mas a validacao com -hostkey falhou."
+        Show-Result $verify "hostkey"
+        return $false
+    }
+
+    Write-OK "Host key aceita para esta execucao: $fingerprint"
+    return $true
 }
 
 function Invoke-SSH {
     param([string]$IP, [string]$Pwd, [string]$Command, [int]$TimeoutSec = 120)
     $plinkArgs = @(
-        "-ssh", "-pw", $Pwd,
+        "-ssh", "-pw", $Pwd
+    ) + (Get-HostKeyArgs -IP $IP) + @(
         "-batch",
         "root@${IP}",
         $Command
@@ -226,7 +292,8 @@ function Invoke-SSH {
 function Invoke-SCP {
     param([string]$IP, [string]$Pwd, [string]$LocalPath, [string]$RemotePath)
     $scpArgs = @(
-        "-pw", $Pwd,
+        "-pw", $Pwd
+    ) + (Get-HostKeyArgs -IP $IP) + @(
         "-batch",
         "-r",
         $LocalPath,
@@ -262,7 +329,11 @@ foreach ($node in $hosts) {
 
     # 0. Aceitar host key (primeira conexao)
     Write-Step "Aceitando host key SSH..."
-    Accept-HostKey -IP $ip -Pwd $pwd
+    if (-not (Accept-HostKey -IP $ip -Pwd $pwd)) {
+        Write-Fail "Nao foi possivel validar host key SSH em $ip."
+        $results[$ip] = "FALHA_HOSTKEY"
+        continue
+    }
 
     # 1. Teste de conectividade
     Write-Step "Testando conexao SSH..."

@@ -87,12 +87,13 @@ Copie `hosts.example.csv` para `hosts.csv`, edite os IPs e senhas:
 
 #### O que o script faz em cada thin client
 
-1. Testa conexão SSH
-2. Faz upload de `linux-usbip-manager/` via SCP para `/tmp/usbip-deploy`
-3. Executa `uninstall.sh --force` (opcional)
-4. Executa `install.sh --server-ip <IP> --notify-host <IP> --notify-port <PORTA>`
-5. Remove os arquivos temporários remotos
-6. Exibe resumo de sucesso/falha por IP
+1. Detecta/valida a host key SSH do PuTTY/Plink com `-hostkey`
+2. Testa conexão SSH
+3. Faz upload de `linux-usbip-manager/` via SCP para `/tmp/usbip-deploy`
+4. Executa `uninstall.sh --force` (opcional)
+5. Executa `install.sh --server-ip <IP> --notify-host <IP> --notify-port <PORTA>`
+6. Remove os arquivos temporários remotos
+7. Exibe resumo de sucesso/falha por IP
 
 ### 3. Thin clients Linux (manual)
 
