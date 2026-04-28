@@ -439,7 +439,8 @@ function ConvertTo-ShSingleQuoted {
 function New-RootCommand {
     param([string]$User, [string]$Pwd, [string]$Command)
 
-    $quotedCommand = ConvertTo-ShSingleQuoted $Command
+    $normalizedCommand = $Command -replace "`r`n", "`n" -replace "`r", "`n"
+    $quotedCommand = ConvertTo-ShSingleQuoted $normalizedCommand
     if ($User -eq "root") {
         return "/bin/bash -c $quotedCommand"
     }
