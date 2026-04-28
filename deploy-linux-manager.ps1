@@ -521,9 +521,11 @@ systemctl stop usbipd 2>/dev/null || true
 systemctl stop usbip-manager 2>/dev/null || true
 systemctl disable usbipd 2>/dev/null || true
 systemctl disable usbip-manager 2>/dev/null || true
+# Mata todos os processos usbipd remanescentes
 pkill usbipd 2>/dev/null || true
+killall usbipd 2>/dev/null || true
 for pid in $(pidof usbipd 2>/dev/null || true); do kill -9 "$pid" 2>/dev/null || true; done
-# Mata qualquer processo escutando na porta 3240 (usbipd antigo)
+# Garante liberação da porta 3240
 fuser -k 3240/tcp 2>/dev/null || true
 rm -f /etc/systemd/system/usbipd.service
 rm -f /lib/systemd/system/usbipd.service
@@ -535,6 +537,9 @@ systemctl daemon-reload
 systemctl reset-failed usbipd usbip-manager 2>/dev/null || true
 modprobe -r usbip_host 2>/dev/null || true
 modprobe -r usbip_core 2>/dev/null || true
+# Reinicia o serviço usbipd após deploy
+systemctl start usbipd 2>/dev/null || true
+systemctl status usbipd 2>/dev/null || true
 '@
     $cleanupResult = Invoke-SSH -IP $ip -User $sshUser -Pwd $pwd -Command (New-RootCommand -User $sshUser -Pwd $pwd -Command $cleanupScript) -TimeoutSec 180
     Show-Result $cleanupResult "cleanup"
