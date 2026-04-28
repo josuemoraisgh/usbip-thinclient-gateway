@@ -50,6 +50,27 @@ winget install PuTTY.PuTTY
     -ServerIP "192.168.100.10"
 ```
 
+Se alguns thin clients aceitam SSH com usuario `armbian`, o script tenta `root` primeiro e depois tenta `armbian` automaticamente quando a falha for senha/usuario:
+
+```powershell
+.\deploy-linux-manager.ps1 `
+    -ThinClients "10.0.64.4","10.0.64.21","10.0.64.22" `
+    -Password "armbina" `
+    -ServerIP "10.0.64.28" `
+    -Force
+```
+
+Tambem e possivel forcar o usuario desde o inicio:
+
+```powershell
+.\deploy-linux-manager.ps1 `
+    -ThinClients "10.0.64.4","10.0.64.22" `
+    -User "armbian" `
+    -Password "armbina" `
+    -ServerIP "10.0.64.28" `
+    -Force
+```
+
 #### Opção B — Senhas diferentes por host (arquivo CSV)
 
 Copie `hosts.example.csv` para `hosts.csv`, edite os IPs e senhas:
@@ -57,6 +78,13 @@ Copie `hosts.example.csv` para `hosts.csv`, edite os IPs e senhas:
 ```
 192.168.100.31,senha_estacao01
 192.168.100.32,senha_estacao02
+```
+
+Tambem pode informar usuario por host no formato `ip,usuario,senha`:
+
+```
+10.0.64.4,armbian,armbina
+10.0.64.22,armbian,armbina
 ```
 
 ```powershell
@@ -84,6 +112,8 @@ Copie `hosts.example.csv` para `hosts.csv`, edite os IPs e senhas:
 | `-SkipUninstall` | Pula o `uninstall.sh` (somente instala/atualiza) | `false` |
 | `-KeepConfig` | Passa `--keep-config` ao `uninstall.sh` | `false` |
 | `-Force` | Não pede confirmação antes de iniciar | `false` |
+
+Observacao: `-User` define o usuario SSH inicial, com padrao `root`. `-FallbackUsers` define usuarios alternativos para tentar quando houver falha de senha/usuario, com padrao `armbian`. O `-ConfigFile` aceita tanto `ip,senha` quanto `ip,usuario,senha`.
 
 #### O que o script faz em cada thin client
 

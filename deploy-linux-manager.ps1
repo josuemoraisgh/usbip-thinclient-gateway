@@ -54,6 +54,8 @@
 param(
     [string[]]$ThinClients,
     [string]$Password,
+    [string]$User = "root",
+    [string[]]$FallbackUsers = @("armbian"),
     [string]$ConfigFile,
     [string]$ServerIP,
     [string]$NotifyPort = "12000",
@@ -112,6 +114,7 @@ Write-OK "plink : $plink"
 Write-OK "pscp  : $pscp"
 
 $script:HostKeyByIP = @{}
+$script:LastHostKeyError = ""
 
 # ─── Diretório do linux-usbip-manager ─────────────────────────────────────────
 
@@ -125,25 +128,35 @@ if (-not (Test-Path -LiteralPath (Join-Path $managerDir "install.sh"))) {
 
 # ─── Carregar lista de hosts ───────────────────────────────────────────────────
 
-$hosts = @()   # array de @{IP=...; Password=...}
+$hosts = @()   # array de @{IP=...; User=...; Password=...}
 
 if ($ConfigFile) {
     if (-not (Test-Path -LiteralPath $ConfigFile)) {
         Write-Fail "ConfigFile nao encontrado: $ConfigFile"
         exit 1
     }
-    Import-Csv -Path $ConfigFile -Header "ip","password" | ForEach-Object {
-        if ($_.ip -match '^\s*#') { return }   # ignora comentarios
-        $hosts += @{ IP = $_.ip.Trim(); Password = $_.password.Trim() }
+    Get-Content -LiteralPath $ConfigFile | ForEach-Object {
+        $line = $_.Trim()
+        if (-not $line -or $line -match '^\s*#') { return }
+        if ($line -match '^\s*ip\s*,') { return }
+
+        $parts = $line.Split(',', 3)
+        if ($parts.Count -eq 2) {
+            $hosts += @{ IP = $parts[0].Trim(); User = $User; Password = $parts[1].Trim() }
+        } elseif ($parts.Count -eq 3) {
+            $hosts += @{ IP = $parts[0].Trim(); User = $parts[1].Trim(); Password = $parts[2].Trim() }
+        } else {
+            Write-Warn "Linha ignorada no ConfigFile: $line"
+        }
     }
 } elseif ($ThinClients) {
     if (-not $Password) {
-        $secPwd = Read-Host "Senha root dos thin clients" -AsSecureString
+        $secPwd = Read-Host "Senha SSH dos thin clients" -AsSecureString
         $Password = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto(
             [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secPwd))
     }
     foreach ($ip in $ThinClients) {
-        $hosts += @{ IP = $ip.Trim(); Password = $Password }
+        $hosts += @{ IP = $ip.Trim(); User = $User; Password = $Password }
     }
 } else {
     Write-Fail "Informe -ThinClients ou -ConfigFile."
@@ -176,11 +189,12 @@ Write-Host "=============================================" -ForegroundColor Whit
 Write-Host "  Hosts         : $($hosts.Count)"
 Write-Host "  Server IP     : $ServerIP"
 Write-Host "  Notify Port   : $NotifyPort"
+Write-Host "  Usuario padrao: $User"
 Write-Host "  Diretorio src : $managerDir"
 Write-Host "  Skip uninstall: $SkipUninstall"
 Write-Host "  Keep config   : $KeepConfig"
 Write-Host ""
-$hosts | ForEach-Object { Write-Host "    $($_.IP)" }
+$hosts | ForEach-Object { Write-Host "    $($_.User)@$($_.IP)" }
 Write-Host ""
 
 if (-not $Force) {
@@ -204,7 +218,7 @@ function Get-HostKeyArgs {
 }
 
 function Invoke-PlinkProbe {
-    param([string]$IP, [string]$Pwd, [string[]]$ExtraArgs = @())
+    param([string]$IP, [string]$User, [string]$Pwd, [string[]]$ExtraArgs = @())
 
     $safe = Safe-TempName $IP
     $outFile = Join-Path $env:TEMP "plink_probe_out_${safe}.txt"
@@ -215,7 +229,7 @@ function Invoke-PlinkProbe {
         "-ssh", "-pw", $Pwd
     ) + $ExtraArgs + @(
         "-batch",
-        "root@${IP}",
+        "${User}@${IP}",
         "echo ok"
     )
 
@@ -231,24 +245,72 @@ function Invoke-PlinkProbe {
     return @{ ExitCode = $proc.ExitCode; Stdout = $out; Stderr = $err }
 }
 
+function Test-AuthFailureText {
+    param([string]$Text)
+    return $Text -match 'Configured password was not accepted|Access denied|Permission denied|Authentication failed'
+}
+
+function Test-NetworkFailureText {
+    param([string]$Text)
+    return $Text -match 'Network error: Connection timed out|Network error: Connection refused|Host does not exist|No route to host|Connection failed'
+}
+
 function Accept-HostKey {
     # Primeiro tenta conexao em batch. Se a host key ainda nao estiver no cache
     # do PuTTY, o Plink retorna o fingerprint no stderr; entao reutilizamos esse
     # SHA256 com -hostkey em todos os comandos seguintes, sem prompt interativo.
-    param([string]$IP, [string]$Pwd)
+    param([string]$IP, [string]$User, [string]$Pwd)
+    $script:LastHostKeyError = ""
 
     if ($script:HostKeyByIP.ContainsKey($IP)) {
-        return $true
+        $cachedProbe = Invoke-PlinkProbe -IP $IP -User $User -Pwd $Pwd -ExtraArgs (Get-HostKeyArgs -IP $IP)
+        if ($cachedProbe.ExitCode -eq 0) {
+            return $true
+        }
+
+        $cachedText = (($cachedProbe.Stdout + $cachedProbe.Stderr) -join "`n")
+        if (Test-NetworkFailureText $cachedText) {
+            $script:LastHostKeyError = "NETWORK"
+            Write-Warn "Nao foi possivel abrir conexao SSH TCP em ${User}@${IP}."
+            Show-Result $cachedProbe "network"
+            return $false
+        }
+        if (Test-AuthFailureText $cachedText) {
+            $script:LastHostKeyError = "AUTH"
+            Write-Warn "SSH respondeu, mas a senha/usuario foi rejeitada em ${User}@${IP}."
+            Show-Result $cachedProbe "auth"
+            return $false
+        }
+
+        $script:LastHostKeyError = "HOSTKEY"
+        Write-Warn "Host key em cache para $IP, mas a validacao falhou."
+        Show-Result $cachedProbe "hostkey"
+        return $false
     }
 
-    $probe = Invoke-PlinkProbe -IP $IP -Pwd $Pwd
+    $probe = Invoke-PlinkProbe -IP $IP -User $User -Pwd $Pwd
     if ($probe.ExitCode -eq 0) {
         return $true
     }
 
     $text = (($probe.Stdout + $probe.Stderr) -join "`n")
+    if (Test-NetworkFailureText $text) {
+        $script:LastHostKeyError = "NETWORK"
+        Write-Warn "Nao foi possivel abrir conexao SSH TCP em ${User}@${IP}."
+        Show-Result $probe "network"
+        return $false
+    }
+
+    if (Test-AuthFailureText $text) {
+        $script:LastHostKeyError = "AUTH"
+        Write-Warn "SSH respondeu, mas a senha/usuario foi rejeitada em ${User}@${IP}."
+        Show-Result $probe "auth"
+        return $false
+    }
+
     $match = [regex]::Match($text, 'SHA256:[A-Za-z0-9+/=]+')
     if (-not $match.Success) {
+        $script:LastHostKeyError = "HOSTKEY"
         Write-Warn "Nao foi possivel detectar fingerprint da host key de $IP."
         Show-Result $probe "hostkey"
         return $false
@@ -257,8 +319,16 @@ function Accept-HostKey {
     $fingerprint = $match.Value
     $script:HostKeyByIP[$IP] = $fingerprint
 
-    $verify = Invoke-PlinkProbe -IP $IP -Pwd $Pwd -ExtraArgs (Get-HostKeyArgs -IP $IP)
+    $verify = Invoke-PlinkProbe -IP $IP -User $User -Pwd $Pwd -ExtraArgs (Get-HostKeyArgs -IP $IP)
     if ($verify.ExitCode -ne 0) {
+        $verifyText = (($verify.Stdout + $verify.Stderr) -join "`n")
+        if (Test-AuthFailureText $verifyText) {
+            $script:LastHostKeyError = "AUTH"
+            Write-Warn "Host key detectada ($fingerprint), mas a senha/usuario foi rejeitada em ${User}@${IP}."
+            Show-Result $verify "auth"
+            return $false
+        }
+        $script:LastHostKeyError = "HOSTKEY"
         Write-Warn "Fingerprint detectado ($fingerprint), mas a validacao com -hostkey falhou."
         Show-Result $verify "hostkey"
         return $false
@@ -269,12 +339,12 @@ function Accept-HostKey {
 }
 
 function Invoke-SSH {
-    param([string]$IP, [string]$Pwd, [string]$Command, [int]$TimeoutSec = 120)
+    param([string]$IP, [string]$User, [string]$Pwd, [string]$Command, [int]$TimeoutSec = 120)
     $plinkArgs = @(
         "-ssh", "-pw", $Pwd
     ) + (Get-HostKeyArgs -IP $IP) + @(
         "-batch",
-        "root@${IP}",
+        "${User}@${IP}",
         $Command
     )
     $proc = Start-Process -FilePath $plink -ArgumentList $plinkArgs `
@@ -290,14 +360,14 @@ function Invoke-SSH {
 }
 
 function Invoke-SCP {
-    param([string]$IP, [string]$Pwd, [string]$LocalPath, [string]$RemotePath)
+    param([string]$IP, [string]$User, [string]$Pwd, [string]$LocalPath, [string]$RemotePath)
     $scpArgs = @(
         "-pw", $Pwd
     ) + (Get-HostKeyArgs -IP $IP) + @(
         "-batch",
         "-r",
         $LocalPath,
-        "root@${IP}:${RemotePath}"
+        "${User}@${IP}:${RemotePath}"
     )
     $proc = Start-Process -FilePath $pscp -ArgumentList $scpArgs `
         -Wait -PassThru -NoNewWindow `
@@ -311,10 +381,71 @@ function Invoke-SCP {
     return @{ ExitCode = $proc.ExitCode; Stdout = $out; Stderr = $err }
 }
 
+function Test-SSHUser {
+    param([string]$IP, [string]$User, [string]$Pwd)
+    $previousError = $script:LastHostKeyError
+    if (Accept-HostKey -IP $IP -User $User -Pwd $Pwd) {
+        return @{ Success = $true; User = $User; Error = "" }
+    }
+    $errorKind = $script:LastHostKeyError
+    $script:LastHostKeyError = $previousError
+    return @{ Success = $false; User = $User; Error = $errorKind }
+}
+
+function Resolve-SSHUser {
+    param([string]$IP, [string]$PreferredUser, [string]$Pwd)
+
+    $primary = Test-SSHUser -IP $IP -User $PreferredUser -Pwd $Pwd
+    if ($primary.Success) {
+        $script:LastHostKeyError = ""
+        return $primary
+    }
+
+    if ($primary.Error -eq "AUTH") {
+        foreach ($candidate in $FallbackUsers) {
+            if (-not $candidate -or $candidate -eq $PreferredUser) {
+                continue
+            }
+            Write-Warn "Falhou como ${PreferredUser}@${IP}; tentando ${candidate}@${IP} com a mesma senha..."
+            $attempt = Test-SSHUser -IP $IP -User $candidate -Pwd $Pwd
+            if ($attempt.Success) {
+                Write-OK "Usuario alternativo aceito: ${candidate}@${IP}"
+                $script:LastHostKeyError = ""
+                return $attempt
+            }
+            if ($attempt.Error -ne "AUTH") {
+                $script:LastHostKeyError = $attempt.Error
+                return $attempt
+            }
+        }
+    }
+
+    $script:LastHostKeyError = $primary.Error
+    return $primary
+}
+
 function Show-Result {
     param($result, [string]$label)
     if ($result.Stdout) { $result.Stdout | ForEach-Object { Write-Host "    | $_" } }
     if ($result.Stderr) { $result.Stderr | Where-Object { $_ -match '\S' } | ForEach-Object { Write-Host "    ! $_" -ForegroundColor DarkYellow } }
+}
+
+function ConvertTo-ShSingleQuoted {
+    param([string]$Value)
+    $escaped = $Value -replace "'", "'`"`"'`"`"'"
+    return "'$escaped'"
+}
+
+function New-RootCommand {
+    param([string]$User, [string]$Pwd, [string]$Command)
+
+    $quotedCommand = ConvertTo-ShSingleQuoted $Command
+    if ($User -eq "root") {
+        return "/bin/bash -c $quotedCommand"
+    }
+
+    $quotedPassword = ConvertTo-ShSingleQuoted $Pwd
+    return "printf '%s\n' $quotedPassword | sudo -S -p '' /bin/bash -c $quotedCommand"
 }
 
 # ─── Deploy por host ──────────────────────────────────────────────────────────
@@ -323,21 +454,33 @@ $results = @{}
 
 foreach ($node in $hosts) {
     $ip  = $node.IP
+    $sshUser = $node.User
     $pwd = $node.Password
 
-    Write-Header "[$ip]"
+    Write-Header "[$sshUser@$ip]"
 
     # 0. Aceitar host key (primeira conexao)
     Write-Step "Aceitando host key SSH..."
-    if (-not (Accept-HostKey -IP $ip -Pwd $pwd)) {
-        Write-Fail "Nao foi possivel validar host key SSH em $ip."
-        $results[$ip] = "FALHA_HOSTKEY"
+    $userResolution = Resolve-SSHUser -IP $ip -PreferredUser $sshUser -Pwd $pwd
+    if ($userResolution.Success) {
+        $sshUser = $userResolution.User
+    } else {
+        if ($script:LastHostKeyError -eq "AUTH") {
+            Write-Fail "Senha/usuario rejeitada em ${sshUser}@${ip}."
+            $results[$ip] = "FALHA_AUTH"
+        } elseif ($script:LastHostKeyError -eq "NETWORK") {
+            Write-Fail "Nao foi possivel conectar na porta SSH em ${sshUser}@${ip}."
+            $results[$ip] = "FALHA_REDE"
+        } else {
+            Write-Fail "Nao foi possivel validar host key SSH em $ip."
+            $results[$ip] = "FALHA_HOSTKEY"
+        }
         continue
     }
 
     # 1. Teste de conectividade
     Write-Step "Testando conexao SSH..."
-    $test = Invoke-SSH -IP $ip -Pwd $pwd -Command "echo pong" -TimeoutSec 15
+    $test = Invoke-SSH -IP $ip -User $sshUser -Pwd $pwd -Command "echo pong" -TimeoutSec 15
     if ($test.ExitCode -ne 0) {
         Write-Fail "Nao foi possivel conectar em $ip (exit $($test.ExitCode))"
         Show-Result $test "conexao"
@@ -348,7 +491,7 @@ foreach ($node in $hosts) {
 
     # 2. Upload dos arquivos
     Write-Step "Enviando linux-usbip-manager/ para ${ip}:$RemoteDir ..."
-    $sshMkdir = Invoke-SSH -IP $ip -Pwd $pwd -Command "rm -rf '$RemoteDir' ; mkdir -p '$RemoteDir'"
+    $sshMkdir = Invoke-SSH -IP $ip -User $sshUser -Pwd $pwd -Command "rm -rf '$RemoteDir' ; mkdir -p '$RemoteDir'"
     if ($sshMkdir.ExitCode -ne 0) {
         Write-Fail "Erro ao criar diretorio remoto."
         Show-Result $sshMkdir "mkdir"
@@ -356,7 +499,7 @@ foreach ($node in $hosts) {
         continue
     }
 
-    $scpResult = Invoke-SCP -IP $ip -Pwd $pwd -LocalPath "$managerDir\*" -RemotePath $RemoteDir
+    $scpResult = Invoke-SCP -IP $ip -User $sshUser -Pwd $pwd -LocalPath "$managerDir\*" -RemotePath $RemoteDir
     if ($scpResult.ExitCode -ne 0) {
         Write-Fail "Erro no upload SCP (exit $($scpResult.ExitCode))."
         Show-Result $scpResult "scp"
@@ -367,44 +510,23 @@ foreach ($node in $hosts) {
 
     # Normalizar line endings (CRLF -> LF) e tornar scripts executaveis
     $normalizeCmd = "for f in '$RemoteDir'/*.sh; do sed -i 's/\r$//' `"`$f`"; done; chmod +x '$RemoteDir'/*.sh '$RemoteDir'/bin/* 2>/dev/null || true"
-    Invoke-SSH -IP $ip -Pwd $pwd -Command $normalizeCmd | Out-Null
+    Invoke-SSH -IP $ip -User $sshUser -Pwd $pwd -Command $normalizeCmd | Out-Null
 
 
-    # 3. Limpeza completa do usbipd antigo e serviço systemd
-    Write-Step "Removendo serviço usbipd antigo, matando processos e limpando arquivos..."
+    # 3. Limpeza do servico usbipd antigo; o install.sh cuida da instalacao do runtime.
+    Write-Step "Removendo servico usbipd antigo e matando processos..."
     $cleanupScript = @'
-sudo systemctl stop usbipd 2>/dev/null || true
-sudo systemctl disable usbipd 2>/dev/null || true
-sudo pkill usbipd 2>/dev/null || true
-sudo kill -9 $(pgrep usbipd) 2>/dev/null || true
-sudo rm -f /etc/systemd/system/usbipd.service
-sudo rm -f /lib/systemd/system/usbipd.service
-sudo systemctl daemon-reload
-sudo rm -f /usr/sbin/usbipd /usr/sbin/usbip
-sudo modprobe -r usbip_host 2>/dev/null || true
-sudo modprobe -r usbip_core 2>/dev/null || true
-sudo apt-get update -y
-sudo apt-get install -y usbip usbip-utils
-if [ ! -f /etc/systemd/system/usbipd.service ] && [ ! -f /lib/systemd/system/usbipd.service ]; then
-  cat <<EOF | sudo tee /etc/systemd/system/usbipd.service
-[Unit]
-Description=USB/IP export daemon
-After=network.target
-
-[Service]
-ExecStartPre=/usr/sbin/modprobe -a usbip-core usbip-host
-ExecStart=/usr/sbin/usbipd -4
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-EOF
-  sudo systemctl daemon-reload
-  sudo systemctl enable usbipd
-  sudo systemctl start usbipd
-fi
+systemctl stop usbipd 2>/dev/null || true
+systemctl disable usbipd 2>/dev/null || true
+pkill usbipd 2>/dev/null || true
+kill -9 $(pgrep usbipd) 2>/dev/null || true
+rm -f /etc/systemd/system/usbipd.service
+rm -f /lib/systemd/system/usbipd.service
+systemctl daemon-reload
+modprobe -r usbip_host 2>/dev/null || true
+modprobe -r usbip_core 2>/dev/null || true
 '@
-    $cleanupResult = Invoke-SSH -IP $ip -Pwd $pwd -Command "/bin/bash -c \"$cleanupScript\"" -TimeoutSec 180
+    $cleanupResult = Invoke-SSH -IP $ip -User $sshUser -Pwd $pwd -Command (New-RootCommand -User $sshUser -Pwd $pwd -Command $cleanupScript) -TimeoutSec 180
     Show-Result $cleanupResult "cleanup"
 
     # 3b. Desinstalar (opcional)
@@ -412,8 +534,9 @@ fi
         Write-Step "Executando uninstall.sh..."
         $uninstArgs = "--force"
         if ($KeepConfig) { $uninstArgs += " --keep-config" }
-        $uninstResult = Invoke-SSH -IP $ip -Pwd $pwd `
-            -Command "bash '$RemoteDir/uninstall.sh' $uninstArgs 2>&1" `
+        $uninstallCmd = "bash '$RemoteDir/uninstall.sh' $uninstArgs 2>&1"
+        $uninstResult = Invoke-SSH -IP $ip -User $sshUser -Pwd $pwd `
+            -Command (New-RootCommand -User $sshUser -Pwd $pwd -Command $uninstallCmd) `
             -TimeoutSec 60
         Show-Result $uninstResult "uninstall"
         if ($uninstResult.ExitCode -ne 0) {
@@ -426,7 +549,7 @@ fi
     # 4. Instalar
     Write-Step "Executando install.sh --server-ip $ServerIP --notify-port $NotifyPort ..."
     $installCmd = "bash '$RemoteDir/install.sh' --server-ip '$ServerIP' --notify-host '$ServerIP' --notify-port '$NotifyPort' 2>&1"
-    $installResult = Invoke-SSH -IP $ip -Pwd $pwd -Command $installCmd -TimeoutSec 180
+    $installResult = Invoke-SSH -IP $ip -User $sshUser -Pwd $pwd -Command (New-RootCommand -User $sshUser -Pwd $pwd -Command $installCmd) -TimeoutSec 180
     Show-Result $installResult "install"
 
     if ($installResult.ExitCode -ne 0) {
@@ -438,7 +561,7 @@ fi
     }
 
     # 5. Limpar arquivos temporarios remotos
-    Invoke-SSH -IP $ip -Pwd $pwd -Command "rm -rf '$RemoteDir'" | Out-Null
+    Invoke-SSH -IP $ip -User $sshUser -Pwd $pwd -Command "rm -rf '$RemoteDir'" | Out-Null
 }
 
 # ─── Resumo final ─────────────────────────────────────────────────────────────
