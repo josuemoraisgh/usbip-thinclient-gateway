@@ -434,7 +434,7 @@ Config LoadConfig(const std::wstring& configPath) {
     config.attachRetryDelaySeconds = std::max(1, ReadIniInt(configPath, L"Broker", L"AttachRetryDelaySeconds", 2));
     config.thinClients = Split(ReadIniString(configPath, L"Broker", L"ThinClients", L""), ',');
     config.allowedDevices = ParseRules(ReadIniString(configPath, L"Broker", L"AllowedDevices", L"303a:1001,303a:*,10c4:ea60,1a86:7523,0403:6010,0403:6001"));
-    config.blockedDevices = ParseRules(ReadIniString(configPath, L"Broker", L"BlockedDevices", L"1d6b:*"));
+    config.blockedDevices = ParseRules(ReadIniString(configPath, L"Broker", L"BlockedDevices", L"1d6b:*,2a7a:9a18,10c4:8105"));
     config.eventListenerEnabled = ReadIniBool(configPath, L"Events", L"Enabled", true);
     config.eventPort = std::max(1, ReadIniInt(configPath, L"Events", L"Port", 12000));
 

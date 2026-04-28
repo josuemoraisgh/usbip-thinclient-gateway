@@ -60,6 +60,8 @@ param(
     [string]$ServerIP,
     [string]$NotifyPort = "12000",
     [string]$RemoteDir  = "/tmp/usbip-deploy",
+    [ValidateSet("allowlist","allow_all")]
+    [string]$BindPolicy = "allowlist",
     [switch]$SkipUninstall,
     [switch]$KeepConfig,
     [switch]$Force
@@ -191,6 +193,7 @@ Write-Host "  Server IP     : $ServerIP"
 Write-Host "  Notify Port   : $NotifyPort"
 Write-Host "  Usuario padrao: $User"
 Write-Host "  Diretorio src : $managerDir"
+Write-Host "  Bind policy   : $BindPolicy"
 Write-Host "  Skip uninstall: $SkipUninstall"
 Write-Host "  Keep config   : $KeepConfig"
 Write-Host ""
@@ -449,6 +452,45 @@ function New-RootCommand {
     return "printf '%s\n' $quotedPassword | sudo -S -p '' /bin/bash -c $quotedCommand"
 }
 
+function Get-BindPolicyInstallArg {
+    param([string]$Policy)
+    if ($Policy -eq "allow_all") {
+        return "--allow-all"
+    }
+    return "--allowlist-only"
+}
+
+function Get-ReleaseLocalInputScript {
+    return @'
+set +e
+modprobe usbhid 2>/dev/null || true
+for dev in /sys/bus/usb/devices/[0-9]*-[0-9]*; do
+  [ -d "$dev" ] || continue
+  busid="$(basename "$dev")"
+  is_hid=0
+  for iface in "$dev":*; do
+    [ -f "$iface/bInterfaceClass" ] || continue
+    cls="$(tr '[:upper:]' '[:lower:]' < "$iface/bInterfaceClass" 2>/dev/null)"
+    [ "$cls" = "03" ] && is_hid=1
+  done
+  [ "$is_hid" = "1" ] || continue
+
+  usbip unbind -b "$busid" >/dev/null 2>&1 || true
+
+  for iface in "$dev":*; do
+    [ -f "$iface/bInterfaceClass" ] || continue
+    cls="$(tr '[:upper:]' '[:lower:]' < "$iface/bInterfaceClass" 2>/dev/null)"
+    [ "$cls" = "03" ] || continue
+    iface_name="$(basename "$iface")"
+    [ -L "$iface/driver" ] && continue
+    [ -w /sys/bus/usb/drivers/usbhid/bind ] && echo "$iface_name" > /sys/bus/usb/drivers/usbhid/bind 2>/dev/null || true
+  done
+done
+udevadm trigger --subsystem-match=usb --action=change 2>/dev/null || true
+udevadm settle 2>/dev/null || true
+'@
+}
+
 # ─── Deploy por host ──────────────────────────────────────────────────────────
 
 $results = @{}
@@ -513,6 +555,12 @@ foreach ($node in $hosts) {
     $normalizeCmd = "for f in '$RemoteDir'/*.sh; do sed -i 's/\r$//' `"`$f`"; done; chmod +x '$RemoteDir'/*.sh '$RemoteDir'/bin/* 2>/dev/null || true"
     Invoke-SSH -IP $ip -User $sshUser -Pwd $pwd -Command $normalizeCmd | Out-Null
 
+    # Se uma instalacao anterior exportou teclado/mouse, devolve HID ao Linux local.
+    Write-Step "Garantindo que teclado/mouse USB fiquem locais..."
+    $releaseInputResult = Invoke-SSH -IP $ip -User $sshUser -Pwd $pwd `
+        -Command (New-RootCommand -User $sshUser -Pwd $pwd -Command (Get-ReleaseLocalInputScript)) `
+        -TimeoutSec 60
+    Show-Result $releaseInputResult "release-input"
 
     # 3. Limpeza do servico usbipd antigo; o install.sh cuida da instalacao do runtime.
     Write-Step "Removendo servico usbipd antigo e matando processos..."
@@ -562,8 +610,9 @@ systemctl status usbipd 2>/dev/null || true
     }
 
     # 4. Instalar
-    Write-Step "Executando install.sh --server-ip $ServerIP --notify-port $NotifyPort ..."
-    $installCmd = "bash '$RemoteDir/install.sh' --server-ip '$ServerIP' --notify-host '$ServerIP' --notify-port '$NotifyPort' 2>&1"
+    $bindPolicyArg = Get-BindPolicyInstallArg -Policy $BindPolicy
+    Write-Step "Executando install.sh $bindPolicyArg --server-ip $ServerIP --notify-port $NotifyPort ..."
+    $installCmd = "bash '$RemoteDir/install.sh' $bindPolicyArg --server-ip '$ServerIP' --notify-host '$ServerIP' --notify-port '$NotifyPort' 2>&1"
     $installResult = Invoke-SSH -IP $ip -User $sshUser -Pwd $pwd -Command (New-RootCommand -User $sshUser -Pwd $pwd -Command $installCmd) -TimeoutSec 180
     Show-Result $installResult "install"
 
@@ -574,6 +623,11 @@ systemctl status usbipd 2>/dev/null || true
         Write-OK "Instalacao concluida com sucesso!"
         $results[$ip] = "OK"
     }
+
+    # Garante novamente apos o udev trigger do instalador.
+    Invoke-SSH -IP $ip -User $sshUser -Pwd $pwd `
+        -Command (New-RootCommand -User $sshUser -Pwd $pwd -Command (Get-ReleaseLocalInputScript)) `
+        -TimeoutSec 60 | Out-Null
 
     # 5. Limpar arquivos temporarios remotos
     Invoke-SSH -IP $ip -User $sshUser -Pwd $pwd -Command "rm -rf '$RemoteDir'" | Out-Null

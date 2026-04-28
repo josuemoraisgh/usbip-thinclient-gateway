@@ -442,7 +442,9 @@ write_config() {
     {"vid": "0403", "pid": "6001", "name": "FTDI FT232"}
   ],
   "blocked_devices": [
-    {"vid": "1d6b", "pid": "*", "name": "Linux USB root hubs"}
+    {"vid": "1d6b", "pid": "*", "name": "Linux USB root hubs"},
+    {"vid": "2a7a", "pid": "9a18", "name": "CASUE USB Keyboard"},
+    {"vid": "10c4", "pid": "8105", "name": "YSPRINGTECH USB optical mouse"}
   ],
   "block_usb_hubs": true,
   "settle_seconds": 2.0,

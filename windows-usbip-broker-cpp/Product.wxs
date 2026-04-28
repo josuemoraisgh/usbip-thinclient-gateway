@@ -114,8 +114,8 @@
         <IniFile Id="CfgUsbipPath" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="UsbipPath" Value="[USBIPPATH]" />
         <IniFile Id="CfgThinClients" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="ThinClients" Value="[THINCLIENTS]" />
         <IniFile Id="CfgAttachPolicy" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AttachPolicy" Value="[ATTACHPOLICY]" />
-        <IniFile Id="CfgAllowedDevices" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AllowedDevices" Value="303a:1001,303a:*,10c4:ea60,1a86:7523,0403:6001" />
-        <IniFile Id="CfgBlockedDevices" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="BlockedDevices" Value="1d6b:*" />
+        <IniFile Id="CfgAllowedDevices" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AllowedDevices" Value="303a:1001,303a:*,10c4:ea60,1a86:7523,0403:6010,0403:6001" />
+        <IniFile Id="CfgBlockedDevices" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="BlockedDevices" Value="1d6b:*,2a7a:9a18,10c4:8105" />
         <IniFile Id="CfgPollInterval" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="PollIntervalSeconds" Value="[POLLTIME]" />
         <IniFile Id="CfgCommandTimeout" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="CommandTimeoutSeconds" Value="25" />
         <IniFile Id="CfgRetryCount" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AttachRetryCount" Value="3" />
