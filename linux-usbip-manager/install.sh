@@ -478,6 +478,10 @@ write_services() {
   manager_monitor="${INSTALL_DIR}/usbip_manager --config ${CONFIG_FILE} monitor"
   manager_event="${INSTALL_DIR}/usbip_manager --config ${CONFIG_FILE} event --busid %I"
 
+  rm -f "${SYSTEMD_DIR}/usbip-manager.service"
+  rm -f "${SYSTEMD_DIR}/usbip-manager-udev@.service"
+  rm -f "${SYSTEMD_DIR}/usbipd.service"
+
   # Force Type=simple (no -D). Even when usbipd --help lists -D, the fork
   # implementation in newer builds is broken (does not write a usable PID file
   # and hangs systemd until TimeoutStartSec). Type=simple works on all known
@@ -590,6 +594,22 @@ disable_conflicting_services() {
   done
 }
 
+stop_existing_runtime() {
+  systemctl disable --now usbip-manager.service usbipd.service 2>/dev/null || true
+  systemctl stop 'usbip-manager-udev@*.service' 2>/dev/null || true
+
+  local pid
+  for pid in $(pidof usbipd 2>/dev/null || true); do
+    kill "${pid}" 2>/dev/null || true
+  done
+  sleep 1
+  for pid in $(pidof usbipd 2>/dev/null || true); do
+    kill -9 "${pid}" 2>/dev/null || true
+  done
+
+  systemctl reset-failed usbip-manager.service usbipd.service 2>/dev/null || true
+}
+
 install_files() {
   mkdir -p "${INSTALL_DIR}"
   local native_source
@@ -647,6 +667,7 @@ fi
 install_files
 install_packages
 validate_tools
+stop_existing_runtime
 write_config
 write_modules_file
 write_services

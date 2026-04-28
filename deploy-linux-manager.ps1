@@ -518,12 +518,21 @@ foreach ($node in $hosts) {
     Write-Step "Removendo servico usbipd antigo e matando processos..."
     $cleanupScript = @'
 systemctl stop usbipd 2>/dev/null || true
+systemctl stop usbip-manager 2>/dev/null || true
 systemctl disable usbipd 2>/dev/null || true
+systemctl disable usbip-manager 2>/dev/null || true
 pkill usbipd 2>/dev/null || true
-kill -9 $(pgrep usbipd) 2>/dev/null || true
+for pid in $(pidof usbipd 2>/dev/null || true); do kill -9 "$pid" 2>/dev/null || true; done
+# Mata qualquer processo escutando na porta 3240 (usbipd antigo)
+fuser -k 3240/tcp 2>/dev/null || true
 rm -f /etc/systemd/system/usbipd.service
 rm -f /lib/systemd/system/usbipd.service
+rm -f /etc/systemd/system/usbip-manager.service
+rm -f /etc/systemd/system/usbip-manager-udev@.service
+rm -f /lib/systemd/system/usbip-manager.service
+rm -f /lib/systemd/system/usbip-manager-udev@.service
 systemctl daemon-reload
+systemctl reset-failed usbipd usbip-manager 2>/dev/null || true
 modprobe -r usbip_host 2>/dev/null || true
 modprobe -r usbip_core 2>/dev/null || true
 '@
