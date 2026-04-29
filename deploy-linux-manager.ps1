@@ -60,8 +60,10 @@ param(
     [string]$ServerIP,
     [string]$NotifyPort = "12000",
     [string]$RemoteDir  = "/tmp/usbip-deploy",
+    [string]$UsbipPath,
     [ValidateSet("allowlist","allow_all")]
     [string]$BindPolicy = "allowlist",
+    [switch]$SkipWindowsAttach,
     [switch]$SkipUninstall,
     [switch]$KeepConfig,
     [switch]$Force
@@ -99,6 +101,29 @@ function Find-PuttyTool {
 $plink = Find-PuttyTool "plink"
 $pscp  = Find-PuttyTool "pscp"
 
+function Find-UsbipTool {
+    param([string]$ExplicitPath)
+    $scriptDir = Split-Path -Parent $MyInvocation.ScriptName
+    $candidates = @()
+    if ($ExplicitPath) {
+        $candidates += $ExplicitPath
+    }
+    $candidates += @(
+        "C:\Program Files\Usbip\usbip.exe",
+        "C:\Program Files\usbip\usbip.exe",
+        "C:\usbip\usbip.exe",
+        (Join-Path $scriptDir "usbip.exe")
+    )
+    foreach ($c in $candidates) {
+        if ($c -and (Test-Path -LiteralPath $c)) { return $c }
+    }
+    $inPath = Get-Command "usbip.exe" -ErrorAction SilentlyContinue
+    if ($inPath) { return $inPath.Source }
+    return $null
+}
+
+$usbip = Find-UsbipTool $UsbipPath
+
 if (-not $plink -or -not $pscp) {
     Write-Host @"
 
@@ -114,6 +139,11 @@ Apos instalar, adicione ao PATH ou coloque plink.exe e pscp.exe na mesma pasta d
 
 Write-OK "plink : $plink"
 Write-OK "pscp  : $pscp"
+if ($usbip) {
+    Write-OK "usbip : $usbip"
+} elseif (-not $SkipWindowsAttach) {
+    Write-Warn "usbip.exe nao encontrado; o deploy continuara sem attach automatico no Windows."
+}
 
 $script:HostKeyByIP = @{}
 $script:LastHostKeyError = ""
@@ -194,6 +224,7 @@ Write-Host "  Notify Port   : $NotifyPort"
 Write-Host "  Usuario padrao: $User"
 Write-Host "  Diretorio src : $managerDir"
 Write-Host "  Bind policy   : $BindPolicy"
+Write-Host "  Windows attach: $(-not $SkipWindowsAttach)"
 Write-Host "  Skip uninstall: $SkipUninstall"
 Write-Host "  Keep config   : $KeepConfig"
 Write-Host ""
@@ -491,6 +522,241 @@ udevadm settle 2>/dev/null || true
 '@
 }
 
+$script:UsbipAllowedRules = @(
+    @{ Vid = "303a"; Pid = "1001" },
+    @{ Vid = "303a"; Pid = "*" },
+    @{ Vid = "10c4"; Pid = "ea60" },
+    @{ Vid = "1a86"; Pid = "7523" },
+    @{ Vid = "0403"; Pid = "6010" },
+    @{ Vid = "0403"; Pid = "6001" }
+)
+
+$script:UsbipBlockedRules = @(
+    @{ Vid = "1d6b"; Pid = "*" },
+    @{ Vid = "2a7a"; Pid = "9a18" },
+    @{ Vid = "10c4"; Pid = "8105" }
+)
+
+function Test-VidPidRule {
+    param([string]$Vid, [string]$ProductId, $Rule)
+    $vidNorm = $Vid.ToLowerInvariant()
+    $pidNorm = $ProductId.ToLowerInvariant()
+    $ruleVid = ([string]$Rule.Vid).ToLowerInvariant()
+    $rulePid = ([string]$Rule.Pid).ToLowerInvariant()
+    return (($ruleVid -eq "*" -or $ruleVid -eq $vidNorm) -and ($rulePid -eq "*" -or $rulePid -eq $pidNorm))
+}
+
+function Test-UsbipAllowed {
+    param([string]$Vid, [string]$ProductId)
+    foreach ($rule in $script:UsbipBlockedRules) {
+        if (Test-VidPidRule -Vid $Vid -ProductId $ProductId -Rule $rule) {
+            return $false
+        }
+    }
+    foreach ($rule in $script:UsbipAllowedRules) {
+        if (Test-VidPidRule -Vid $Vid -ProductId $ProductId -Rule $rule) {
+            return $true
+        }
+    }
+    return $false
+}
+
+function Get-AttachedUsbipKeys {
+    param([string]$UsbipExe)
+    $keys = @{}
+    $portText = & $UsbipExe port 2>&1
+    foreach ($line in $portText) {
+        if ($line -match 'usbip://([^/:]+)(?::[0-9]+)?/(\S+)') {
+            $keys["$($matches[1].ToLowerInvariant())/$($matches[2])"] = $true
+        }
+    }
+    return $keys
+}
+
+function Get-RemoteUsbipDevices {
+    param([string]$UsbipExe, [string]$IP)
+    $devices = @()
+    $current = $null
+    $listText = & $UsbipExe list -r $IP 2>&1
+    foreach ($line in $listText) {
+        if ($line -match '^\s*(?:-\s*)?([0-9]+(?:-[0-9.]+)+)\s*:\s*(.*?)(?:\(([0-9a-fA-F]{4}):([0-9a-fA-F]{4})\))?\s*$') {
+            $current = [pscustomobject]@{
+                BusId = $matches[1]
+                Description = $matches[2].Trim()
+                Vid = ""
+                Pid = ""
+            }
+            if ($matches.Count -ge 5 -and $matches[3]) {
+                $current.Vid = $matches[3].ToLowerInvariant()
+                $current.Pid = $matches[4].ToLowerInvariant()
+            }
+            $devices += $current
+            continue
+        }
+        if ($current -and $line -match '\(([0-9a-fA-F]{4}):([0-9a-fA-F]{4})\)') {
+            $current.Vid = $matches[1].ToLowerInvariant()
+            $current.Pid = $matches[2].ToLowerInvariant()
+        }
+    }
+    return $devices
+}
+
+function Invoke-WindowsUsbipAttach {
+    param([string]$IP)
+    if ($SkipWindowsAttach -or -not $usbip) {
+        return
+    }
+
+    Write-Step "Anexando no Windows dispositivos USB/IP permitidos de $IP ..."
+    $sawAllowedDevice = $false
+    for ($attempt = 1; $attempt -le 6; $attempt++) {
+        $attached = Get-AttachedUsbipKeys -UsbipExe $usbip
+        $devices = Get-RemoteUsbipDevices -UsbipExe $usbip -IP $IP
+        foreach ($device in $devices) {
+            if (-not $device.Vid -or -not $device.Pid) {
+                Write-Warn "Ignorando $IP/$($device.BusId): VID/PID nao detectado."
+                continue
+            }
+            if (-not (Test-UsbipAllowed -Vid $device.Vid -ProductId $device.Pid)) {
+                if ($attempt -eq 1) {
+                    Write-Step "Ignorando $IP/$($device.BusId) $($device.Vid):$($device.Pid) ($($device.Description))."
+                }
+                continue
+            }
+            $sawAllowedDevice = $true
+            $key = "$($IP.ToLowerInvariant())/$($device.BusId)"
+            if ($attached.ContainsKey($key)) {
+                Write-OK "Ja anexado: $IP/$($device.BusId) $($device.Vid):$($device.Pid)"
+                continue
+            }
+            $attachOut = & $usbip attach -r $IP -b $device.BusId 2>&1
+            $attachText = ($attachOut -join "`n")
+            if ($LASTEXITCODE -eq 0 -or $attachText -match 'already|busy|succesfully|successfully') {
+                Write-OK "Anexado: $IP/$($device.BusId) $($device.Vid):$($device.Pid)"
+                continue
+            }
+            Write-Warn "Falha ao anexar $IP/$($device.BusId) $($device.Vid):$($device.Pid)."
+            $attachOut | Where-Object { $_ -match '\S' } | ForEach-Object { Write-Host "    ! $_" -ForegroundColor DarkYellow }
+        }
+        if ($sawAllowedDevice) {
+            return
+        }
+        Start-Sleep -Seconds 3
+    }
+    Write-Warn "Nenhum dispositivo USB/IP permitido exportado por $IP apos aguardar."
+}
+
+function Update-WindowsBrokerConfig {
+    $cfg = "C:\ProgramData\UsbipBrokerCpp\config.ini"
+    if (-not (Test-Path -LiteralPath $cfg)) {
+        return
+    }
+    $text = Get-Content -LiteralPath $cfg -Raw
+    $changed = $false
+    $allowed = "AllowedDevices=303a:1001,303a:*,10c4:ea60,1a86:7523,0403:6010,0403:6001"
+    $blocked = "BlockedDevices=1d6b:*,2a7a:9a18,10c4:8105"
+    if ($text -match '(?m)^AllowedDevices=') {
+        $newText = $text -replace '(?m)^AllowedDevices=.*$', $allowed
+    } else {
+        $newText = $text -replace '(?m)^\[Broker\]\s*$', "[Broker]`r`n$allowed"
+    }
+    if ($newText -ne $text) { $changed = $true; $text = $newText }
+
+    if ($text -match '(?m)^BlockedDevices=') {
+        $newText = $text -replace '(?m)^BlockedDevices=.*$', $blocked
+    } else {
+        $newText = $text -replace '(?m)^AllowedDevices=.*$', "$allowed`r`n$blocked"
+    }
+    if ($newText -ne $text) { $changed = $true; $text = $newText }
+
+    if ($changed) {
+        Set-Content -LiteralPath $cfg -Value $text -Encoding ASCII
+        Write-OK "Config do UsbipBrokerCpp atualizada: AllowedDevices/BlockedDevices"
+        $svc = Get-Service -Name "UsbipBrokerCpp" -ErrorAction SilentlyContinue
+        if ($svc) {
+            Restart-Service -Name "UsbipBrokerCpp" -ErrorAction SilentlyContinue
+            Write-OK "Servico UsbipBrokerCpp reiniciado"
+        }
+    }
+}
+
+Update-WindowsBrokerConfig
+
+function Install-WindowsAutoAttachService {
+    if ($SkipWindowsAttach) {
+        return
+    }
+
+    $source = Join-Path $scriptDir "windows-usbip-autoattach.ps1"
+    if (-not (Test-Path -LiteralPath $source)) {
+        Write-Warn "windows-usbip-autoattach.ps1 nao encontrado; hotplug automatico no Windows nao sera instalado."
+        return
+    }
+
+    $destDir = "C:\ProgramData\UsbipBrokerCpp"
+    $dest = Join-Path $destDir "usbip-autoattach.ps1"
+    New-Item -ItemType Directory -Force -Path $destDir | Out-Null
+    Copy-Item -LiteralPath $source -Destination $dest -Force
+
+    $nssm = "C:\Program Files\Nssm\win64\nssm.exe"
+    if (-not (Test-Path -LiteralPath $nssm)) {
+        Write-Warn "nssm.exe nao encontrado; hotplug automatico no Windows nao sera instalado como servico."
+        return
+    }
+
+    $old = Get-Service -Name "UsbipPythonService" -ErrorAction SilentlyContinue
+    if ($old) {
+        Stop-Service -Name "UsbipPythonService" -ErrorAction SilentlyContinue
+        & $nssm set UsbipPythonService Start SERVICE_DISABLED | Out-Null
+        Write-OK "Servico antigo UsbipPythonService desabilitado"
+    }
+
+    $svc = Get-Service -Name "UsbipAutoAttach" -ErrorAction SilentlyContinue
+    if (-not $svc) {
+        & $nssm install UsbipAutoAttach "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" "-NoProfile -ExecutionPolicy Bypass -File `"$dest`"" | Out-Null
+        & $nssm set UsbipAutoAttach AppDirectory $destDir | Out-Null
+        & $nssm set UsbipAutoAttach Start SERVICE_AUTO_START | Out-Null
+        Write-OK "Servico UsbipAutoAttach instalado"
+    } else {
+        & $nssm set UsbipAutoAttach Application "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" | Out-Null
+        & $nssm set UsbipAutoAttach AppParameters "-NoProfile -ExecutionPolicy Bypass -File `"$dest`"" | Out-Null
+        & $nssm set UsbipAutoAttach AppDirectory $destDir | Out-Null
+        & $nssm set UsbipAutoAttach Start SERVICE_AUTO_START | Out-Null
+    }
+
+    Restart-Service -Name "UsbipAutoAttach" -ErrorAction SilentlyContinue
+    Write-OK "Servico UsbipAutoAttach ativo"
+}
+
+function Update-WindowsBrokerThinClients {
+    param($Hosts)
+    $cfg = "C:\ProgramData\UsbipBrokerCpp\config.ini"
+    if (-not (Test-Path -LiteralPath $cfg)) {
+        return
+    }
+
+    $existing = @()
+    $text = Get-Content -LiteralPath $cfg -Raw
+    if ($text -match '(?m)^ThinClients=(.*)$') {
+        $existing = $matches[1] -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+    }
+    $all = @($existing + ($Hosts | ForEach-Object { $_.IP })) | Where-Object { $_ } | Sort-Object -Unique
+    $line = "ThinClients=$($all -join ',')"
+    if ($text -match '(?m)^ThinClients=') {
+        $newText = $text -replace '(?m)^ThinClients=.*$', $line
+    } else {
+        $newText = $text -replace '(?m)^\[Broker\]\s*$', "[Broker]`r`n$line"
+    }
+    if ($newText -ne $text) {
+        Set-Content -LiteralPath $cfg -Value $newText -Encoding ASCII
+        Write-OK "ThinClients atualizado no broker Windows"
+        Restart-Service -Name "UsbipAutoAttach" -ErrorAction SilentlyContinue
+    }
+}
+
+Install-WindowsAutoAttachService
+Update-WindowsBrokerThinClients -Hosts $hosts
+
 # ─── Deploy por host ──────────────────────────────────────────────────────────
 
 $results = @{}
@@ -628,6 +894,8 @@ systemctl status usbipd 2>/dev/null || true
     Invoke-SSH -IP $ip -User $sshUser -Pwd $pwd `
         -Command (New-RootCommand -User $sshUser -Pwd $pwd -Command (Get-ReleaseLocalInputScript)) `
         -TimeoutSec 60 | Out-Null
+
+    Invoke-WindowsUsbipAttach -IP $ip
 
     # 5. Limpar arquivos temporarios remotos
     Invoke-SSH -IP $ip -User $sshUser -Pwd $pwd -Command "rm -rf '$RemoteDir'" | Out-Null

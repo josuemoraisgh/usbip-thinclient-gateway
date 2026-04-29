@@ -741,7 +741,7 @@ void ApplyWinUsbRules(const Config& config, bool waitForSettle) {
 
 std::vector<RemoteDevice> ParseUsbipList(const std::string& text, const std::string& host) {
     std::vector<RemoteDevice> devices;
-    std::regex busLine(R"(^\s*(?:-\s*)?([0-9]+(?:-[0-9.]+)+):\s*(.*?)(?:\(([0-9a-fA-F]{4}):([0-9a-fA-F]{4})\))?\s*$)");
+    std::regex busLine(R"(^\s*(?:-\s*)?([0-9]+(?:-[0-9.]+)+)\s*:\s*(.*?)(?:\(([0-9a-fA-F]{4}):([0-9a-fA-F]{4})\))?\s*$)");
     std::regex vidPid(R"(\(([0-9a-fA-F]{4}):([0-9a-fA-F]{4})\))");
     std::stringstream stream(text);
     std::string line;
