@@ -78,7 +78,7 @@
         <Directory Id="LOGDIR" Name="logs" />
       </Directory>
     </StandardDirectory>
-    <StandardDirectory Id="CommonStartupFolder" />
+    <StandardDirectory Id="StartupFolder" />
 
     <Feature Id="MainFeature" Title="USB/IP Suite" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
@@ -180,8 +180,7 @@
       </Component>
 
       <!-- Entrada de auto-start na bandeja (HKLM – todos os usuários) -->
-      <Component Id="TrayAutoStartComponent" Directory="TRAYDIR" Guid="E6C837A9-2D14-4F8B-9C56-B0F23E7A1D45">
-        <Condition>AUTOSTARTTRAY = "1"</Condition>
+      <Component Id="TrayAutoStartComponent" Directory="TRAYDIR" Guid="E6C837A9-2D14-4F8B-9C56-B0F23E7A1D45" Condition='AUTOSTARTTRAY = "1"'>
         <CreateFolder />
         <RegistryValue
             Root="HKLM"
@@ -193,8 +192,7 @@
             Action="write" />
       </Component>
 
-      <Component Id="TrayCommonStartupShortcutComponent" Directory="CommonStartupFolder" Guid="F39F0E2A-B9B3-4764-A267-3D83257D8EF5">
-        <Condition>AUTOSTARTTRAY = "1"</Condition>
+      <Component Id="TrayCommonStartupShortcutComponent" Directory="StartupFolder" Guid="F39F0E2A-B9B3-4764-A267-3D83257D8EF5" Condition='AUTOSTARTTRAY = "1"'>
         <Shortcut
             Id="UsbipMonitorCommonStartupShortcut"
             Name="USB-IP Monitor"
