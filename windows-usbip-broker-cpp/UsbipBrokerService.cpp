@@ -87,6 +87,7 @@ std::atomic<bool> g_stopRequested(false);
 std::mutex g_logMutex;
 std::mutex g_winUsbMutex;
 std::set<std::string> g_winUsbApplied;
+std::set<std::string> g_auditWritten;
 
 std::wstring GetExecutableDirectory() {
     wchar_t buffer[MAX_PATH] = {};
@@ -273,7 +274,7 @@ void LogLine(const std::wstring& logPath, const std::string& level, const std::s
     EnsureDirectoryForFile(logPath);
     SYSTEMTIME now = {};
     GetLocalTime(&now);
-    std::ofstream log(logPath, std::ios::app | std::ios::binary);
+    std::ofstream log(WideToUtf8(logPath), std::ios::app | std::ios::binary);
     if (!log) {
         return;
     }
@@ -335,6 +336,18 @@ std::string FindNewComPort(const std::set<std::string>& before,
     return {};
 }
 
+std::string ExtractComPort(const std::string& text) {
+    std::smatch match;
+    if (std::regex_search(text, match, std::regex("(COM[0-9]+)", std::regex::icase))) {
+        std::string port = match[1].str();
+        std::transform(port.begin(), port.end(), port.begin(), [](unsigned char ch) {
+            return static_cast<char>(std::toupper(ch));
+        });
+        return port;
+    }
+    return {};
+}
+
 // Grava uma linha no audit log CSV com a rastreabilidade COM x estacao.
 // Cria o cabecalho na primeira vez que o arquivo e criado.
 void WriteAuditEntry(const std::wstring& auditPath,
@@ -349,10 +362,10 @@ void WriteAuditEntry(const std::wstring& auditPath,
     EnsureDirectoryForFile(auditPath);
     bool fileExists = false;
     {
-        std::ifstream check(auditPath);
+        std::ifstream check(WideToUtf8(auditPath));
         fileExists = check.good();
     }
-    std::ofstream file(auditPath, std::ios::app | std::ios::binary);
+    std::ofstream file(WideToUtf8(auditPath), std::ios::app | std::ios::binary);
     if (!file) {
         return;
     }
@@ -660,6 +673,59 @@ std::vector<PnpDevice> ListPresentPnpDevices(const Config& config) {
     return devices;
 }
 
+std::string FindPresentComPortForVidPid(const Config& config,
+                                        const std::string& vid,
+                                        const std::string& pid) {
+    std::string needleA = "vid_" + Lower(vid) + "&pid_" + Lower(pid);
+    std::string needleB = "vid_" + Lower(vid) + "+pid_" + Lower(pid);
+    for (const PnpDevice& device : ListPresentPnpDevices(config)) {
+        if (Lower(device.className) != "ports") {
+            continue;
+        }
+        std::string instanceId = Lower(device.instanceId);
+        if (instanceId.find(needleA) == std::string::npos &&
+            instanceId.find(needleB) == std::string::npos) {
+            continue;
+        }
+        std::string port = ExtractComPort(device.friendlyName);
+        if (!port.empty()) {
+            return port;
+        }
+    }
+    return {};
+}
+
+std::string ResolveStationName(const Config& config, const std::string& host) {
+    auto it = config.stationNames.find(host);
+    if (it != config.stationNames.end()) {
+        return it->second;
+    }
+    return host;
+}
+
+void AuditDeviceOnce(const Config& config,
+                     const RemoteDevice& device,
+                     const std::string& comPort) {
+    std::string key = Lower(device.host) + "/" + device.busid + "/" + Lower(device.vid) + ":" + Lower(device.pid);
+    {
+        std::lock_guard<std::mutex> lock(g_logMutex);
+        if (g_auditWritten.find(key) != g_auditWritten.end()) {
+            return;
+        }
+        g_auditWritten.insert(key);
+    }
+    std::string stationName = ResolveStationName(config, device.host);
+    std::ostringstream auditMsg;
+    auditMsg << "COM port assigned: " << (comPort.empty() ? "?" : comPort)
+             << " station=" << stationName
+             << " " << device.host << "/" << device.busid
+             << " " << device.vid << ":" << device.pid
+             << " (" << device.description << ")";
+    LogLine(config.logPath, "INFO", auditMsg.str());
+    WriteAuditEntry(config.auditLogPath, stationName, device.host, device.busid,
+                    device.vid, device.pid, device.description, comPort);
+}
+
 std::wstring ResolveWinUsbInf(const Config& config, const WinUsbRule& rule) {
     if (!rule.driverInf.empty()) {
         return rule.driverInf;
@@ -779,6 +845,42 @@ std::set<std::string> ParseUsbipPortKeys(const std::string& text) {
     return keys;
 }
 
+std::vector<RemoteDevice> ParseUsbipPortDevices(const std::string& text) {
+    std::vector<RemoteDevice> devices;
+    std::regex descLine(R"(^\s*(.+?)\s+\(([0-9a-fA-F]{4}):([0-9a-fA-F]{4})\)\s*$)");
+    std::regex remote(R"(usbip://([^/:]+)(?::[0-9]+)?/(\S+))", std::regex::icase);
+    std::stringstream stream(text);
+    std::string line;
+    RemoteDevice current;
+    bool haveDescription = false;
+    while (std::getline(stream, line)) {
+        std::smatch match;
+        if (std::regex_match(line, match, descLine)) {
+            current = RemoteDevice{};
+            current.description = Trim(match[1].str());
+            current.vid = NormalizeHex(match[2].str());
+            current.pid = NormalizeHex(match[3].str());
+            haveDescription = true;
+            continue;
+        }
+        if (haveDescription && std::regex_search(line, match, remote)) {
+            current.host = match[1].str();
+            current.busid = match[2].str();
+            devices.push_back(current);
+            haveDescription = false;
+        }
+    }
+    return devices;
+}
+
+std::vector<RemoteDevice> AttachedDevices(const Config& config) {
+    CommandResult result = RunCommand(config, {L"port"});
+    if (result.exitCode != 0) {
+        return {};
+    }
+    return ParseUsbipPortDevices(result.output);
+}
+
 bool MatchesRule(const RemoteDevice& device, const DeviceRule& rule) {
     return WildcardMatch(device.vid, rule.vid) && WildcardMatch(device.pid, rule.pid);
 }
@@ -846,22 +948,7 @@ bool AttachDevice(const Config& config, const RemoteDevice& device) {
                     break;
                 }
             }
-            // Resolve o nome da estacao a partir do IP
-            std::string stationName = device.host;
-            auto it = config.stationNames.find(device.host);
-            if (it != config.stationNames.end()) {
-                stationName = it->second;
-            }
-            // Registra no broker log e no audit CSV
-            std::ostringstream auditMsg;
-            auditMsg << "COM port assigned: " << (newPort.empty() ? "?" : newPort)
-                     << " station=" << stationName
-                     << " " << device.host << "/" << device.busid
-                     << " " << device.vid << ":" << device.pid
-                     << " (" << device.description << ")";
-            LogLine(config.logPath, "INFO", auditMsg.str());
-            WriteAuditEntry(config.auditLogPath, stationName, device.host, device.busid,
-                            device.vid, device.pid, device.description, newPort);
+            AuditDeviceOnce(config, device, newPort);
             return true;
         }
         LogLine(config.logPath, "WARN", "usbip attach failed: " + Trim(result.output));
@@ -873,6 +960,13 @@ bool AttachDevice(const Config& config, const RemoteDevice& device) {
 int ScanOnce(const Config& config, const std::string& targetHost = "", const std::string& targetBusid = "") {
     std::set<std::string> attached = AttachedKeys(config);
     int attachedCount = 0;
+    for (const RemoteDevice& device : AttachedDevices(config)) {
+        if ((!targetHost.empty() && Lower(device.host) != Lower(targetHost)) ||
+            (!targetBusid.empty() && device.busid != targetBusid)) {
+            continue;
+        }
+        AuditDeviceOnce(config, device, FindPresentComPortForVidPid(config, device.vid, device.pid));
+    }
     std::vector<std::string> hosts = config.thinClients;
     if (!targetHost.empty() && std::find(hosts.begin(), hosts.end(), targetHost) == hosts.end()) {
         hosts.push_back(targetHost);
@@ -891,6 +985,7 @@ int ScanOnce(const Config& config, const std::string& targetHost = "", const std
             }
             std::string key = Lower(host) + "/" + device.busid;
             if (attached.find(key) != attached.end()) {
+                AuditDeviceOnce(config, device, FindPresentComPortForVidPid(config, device.vid, device.pid));
                 continue;
             }
             if (AttachDevice(config, device)) {
@@ -952,7 +1047,10 @@ void EventListener(const Config& config) {
             continue;
         }
         char peerHost[INET_ADDRSTRLEN] = {};
-        inet_ntop(AF_INET, &peer.sin_addr, peerHost, sizeof(peerHost));
+        const char* peerText = inet_ntoa(peer.sin_addr);
+        if (peerText) {
+            std::snprintf(peerHost, sizeof(peerHost), "%s", peerText);
+        }
         char buffer[16384] = {};
         int received = recv(client, buffer, static_cast<int>(sizeof(buffer) - 1), 0);
         closesocket(client);

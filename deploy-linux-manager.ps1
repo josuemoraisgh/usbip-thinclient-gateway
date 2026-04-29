@@ -655,6 +655,8 @@ function Update-WindowsBrokerConfig {
     $changed = $false
     $allowed = "AllowedDevices=303a:1001,303a:*,10c4:ea60,1a86:7523,0403:6010,0403:6001"
     $blocked = "BlockedDevices=1d6b:*,2a7a:9a18,10c4:8105"
+    $pollInterval = "PollIntervalSeconds=5"
+    $commandTimeout = "CommandTimeoutSeconds=5"
     if ($text -match '(?m)^AllowedDevices=') {
         $newText = $text -replace '(?m)^AllowedDevices=.*$', $allowed
     } else {
@@ -669,9 +671,23 @@ function Update-WindowsBrokerConfig {
     }
     if ($newText -ne $text) { $changed = $true; $text = $newText }
 
+    if ($text -match '(?m)^PollIntervalSeconds=') {
+        $newText = $text -replace '(?m)^PollIntervalSeconds=.*$', $pollInterval
+    } else {
+        $newText = $text -replace '(?m)^BlockedDevices=.*$', "$blocked`r`n$pollInterval"
+    }
+    if ($newText -ne $text) { $changed = $true; $text = $newText }
+
+    if ($text -match '(?m)^CommandTimeoutSeconds=') {
+        $newText = $text -replace '(?m)^CommandTimeoutSeconds=.*$', $commandTimeout
+    } else {
+        $newText = $text -replace '(?m)^PollIntervalSeconds=.*$', "$pollInterval`r`n$commandTimeout"
+    }
+    if ($newText -ne $text) { $changed = $true; $text = $newText }
+
     if ($changed) {
         Set-Content -LiteralPath $cfg -Value $text -Encoding ASCII
-        Write-OK "Config do UsbipBrokerCpp atualizada: AllowedDevices/BlockedDevices"
+        Write-OK "Config do UsbipBrokerCpp atualizada: allowlist e timeouts"
         $svc = Get-Service -Name "UsbipBrokerCpp" -ErrorAction SilentlyContinue
         if ($svc) {
             Restart-Service -Name "UsbipBrokerCpp" -ErrorAction SilentlyContinue
@@ -681,52 +697,6 @@ function Update-WindowsBrokerConfig {
 }
 
 Update-WindowsBrokerConfig
-
-function Install-WindowsAutoAttachService {
-    if ($SkipWindowsAttach) {
-        return
-    }
-
-    $source = Join-Path $scriptDir "windows-usbip-autoattach.ps1"
-    if (-not (Test-Path -LiteralPath $source)) {
-        Write-Warn "windows-usbip-autoattach.ps1 nao encontrado; hotplug automatico no Windows nao sera instalado."
-        return
-    }
-
-    $destDir = "C:\ProgramData\UsbipBrokerCpp"
-    $dest = Join-Path $destDir "usbip-autoattach.ps1"
-    New-Item -ItemType Directory -Force -Path $destDir | Out-Null
-    Copy-Item -LiteralPath $source -Destination $dest -Force
-
-    $nssm = "C:\Program Files\Nssm\win64\nssm.exe"
-    if (-not (Test-Path -LiteralPath $nssm)) {
-        Write-Warn "nssm.exe nao encontrado; hotplug automatico no Windows nao sera instalado como servico."
-        return
-    }
-
-    $old = Get-Service -Name "UsbipPythonService" -ErrorAction SilentlyContinue
-    if ($old) {
-        Stop-Service -Name "UsbipPythonService" -ErrorAction SilentlyContinue
-        & $nssm set UsbipPythonService Start SERVICE_DISABLED | Out-Null
-        Write-OK "Servico antigo UsbipPythonService desabilitado"
-    }
-
-    $svc = Get-Service -Name "UsbipAutoAttach" -ErrorAction SilentlyContinue
-    if (-not $svc) {
-        & $nssm install UsbipAutoAttach "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" "-NoProfile -ExecutionPolicy Bypass -File `"$dest`"" | Out-Null
-        & $nssm set UsbipAutoAttach AppDirectory $destDir | Out-Null
-        & $nssm set UsbipAutoAttach Start SERVICE_AUTO_START | Out-Null
-        Write-OK "Servico UsbipAutoAttach instalado"
-    } else {
-        & $nssm set UsbipAutoAttach Application "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" | Out-Null
-        & $nssm set UsbipAutoAttach AppParameters "-NoProfile -ExecutionPolicy Bypass -File `"$dest`"" | Out-Null
-        & $nssm set UsbipAutoAttach AppDirectory $destDir | Out-Null
-        & $nssm set UsbipAutoAttach Start SERVICE_AUTO_START | Out-Null
-    }
-
-    Restart-Service -Name "UsbipAutoAttach" -ErrorAction SilentlyContinue
-    Write-OK "Servico UsbipAutoAttach ativo"
-}
 
 function Update-WindowsBrokerThinClients {
     param($Hosts)
@@ -750,12 +720,12 @@ function Update-WindowsBrokerThinClients {
     if ($newText -ne $text) {
         Set-Content -LiteralPath $cfg -Value $newText -Encoding ASCII
         Write-OK "ThinClients atualizado no broker Windows"
-        Restart-Service -Name "UsbipAutoAttach" -ErrorAction SilentlyContinue
+        Restart-Service -Name "UsbipBrokerCpp" -ErrorAction SilentlyContinue
     }
 }
 
-Install-WindowsAutoAttachService
 Update-WindowsBrokerThinClients -Hosts $hosts
+
 
 # ─── Deploy por host ──────────────────────────────────────────────────────────
 
@@ -852,8 +822,6 @@ systemctl reset-failed usbipd usbip-manager 2>/dev/null || true
 modprobe -r usbip_host 2>/dev/null || true
 modprobe -r usbip_core 2>/dev/null || true
 # Reinicia o serviço usbipd após deploy
-systemctl start usbipd 2>/dev/null || true
-systemctl status usbipd 2>/dev/null || true
 '@
     $cleanupResult = Invoke-SSH -IP $ip -User $sshUser -Pwd $pwd -Command (New-RootCommand -User $sshUser -Pwd $pwd -Command $cleanupScript) -TimeoutSec 180
     Show-Result $cleanupResult "cleanup"

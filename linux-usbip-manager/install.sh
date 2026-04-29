@@ -500,6 +500,7 @@ Wants=network-online.target
 
 [Service]
 Type=${usbipd_type}
+ExecStartPre=-/usr/bin/pkill -x usbipd
 ExecStartPre=${modprobe_bin} -a usbip-core usbip-host
 ExecStart=${usbipd_bin} ${usbipd_args}
 EOF
