@@ -9,7 +9,10 @@
       UpgradeCode="2C012E49-1D39-4551-8F67-1503447C4035"
       Scope="perMachine">
 
-    <MajorUpgrade DowngradeErrorMessage="A newer version of USB/IP Broker C++ is already installed." />
+    <MajorUpgrade
+        AllowSameVersionUpgrades="yes"
+        Schedule="afterInstallExecute"
+        DowngradeErrorMessage="A newer version of USB/IP Broker C++ is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
     <Property Id="USBIPPATH" Value="C:\usbip\usbip.exe" />
@@ -75,6 +78,7 @@
         <Directory Id="LOGDIR" Name="logs" />
       </Directory>
     </StandardDirectory>
+    <StandardDirectory Id="CommonStartupFolder" />
 
     <Feature Id="MainFeature" Title="USB/IP Suite" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
@@ -109,22 +113,22 @@
             Protocol="tcp" />
       </Component>
 
-      <Component Id="ConfigComponent" Directory="DATADIR" Guid="A671E2E6-0B71-4B7E-BF93-DB055B04E97E">
+      <Component Id="ConfigComponent" Directory="DATADIR" Guid="A671E2E6-0B71-4B7E-BF93-DB055B04E97E" Permanent="yes">
         <CreateFolder />
-        <IniFile Id="CfgUsbipPath" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="UsbipPath" Value="[USBIPPATH]" />
-        <IniFile Id="CfgThinClients" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="ThinClients" Value="[THINCLIENTS]" />
-        <IniFile Id="CfgAttachPolicy" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AttachPolicy" Value="[ATTACHPOLICY]" />
-        <IniFile Id="CfgAllowedDevices" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AllowedDevices" Value="303a:1001,303a:*,10c4:ea60,1a86:7523,0403:6010,0403:6001" />
-        <IniFile Id="CfgBlockedDevices" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="BlockedDevices" Value="1d6b:*,2a7a:9a18,10c4:8105" />
-        <IniFile Id="CfgPollInterval" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="PollIntervalSeconds" Value="[POLLTIME]" />
-        <IniFile Id="CfgCommandTimeout" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="CommandTimeoutSeconds" Value="25" />
-        <IniFile Id="CfgRetryCount" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AttachRetryCount" Value="3" />
-        <IniFile Id="CfgRetryDelay" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AttachRetryDelaySeconds" Value="2" />
-        <IniFile Id="CfgLogPath" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="LogPath" Value="[DATADIR]logs\broker.log" />
-        <IniFile Id="CfgStatePath" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="StatePath" Value="[DATADIR]state.txt" />
-        <IniFile Id="CfgAuditLogPath" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AuditLogPath" Value="[DATADIR]logs\audit.csv" />
-        <IniFile Id="CfgEventsEnabled" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Events" Key="Enabled" Value="1" />
-        <IniFile Id="CfgEventsPort" Action="addLine" Directory="DATADIR" Name="config.ini" Section="Events" Key="Port" Value="[EVENTPORT]" />
+        <IniFile Id="CfgUsbipPath" Action="createLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="UsbipPath" Value="[USBIPPATH]" />
+        <IniFile Id="CfgThinClients" Action="createLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="ThinClients" Value="[THINCLIENTS]" />
+        <IniFile Id="CfgAttachPolicy" Action="createLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AttachPolicy" Value="[ATTACHPOLICY]" />
+        <IniFile Id="CfgAllowedDevices" Action="createLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AllowedDevices" Value="303a:1001,303a:*,10c4:ea60,1a86:7523,0403:6010,0403:6001" />
+        <IniFile Id="CfgBlockedDevices" Action="createLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="BlockedDevices" Value="1d6b:*,2a7a:9a18,10c4:8105" />
+        <IniFile Id="CfgPollInterval" Action="createLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="PollIntervalSeconds" Value="[POLLTIME]" />
+        <IniFile Id="CfgCommandTimeout" Action="createLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="CommandTimeoutSeconds" Value="25" />
+        <IniFile Id="CfgRetryCount" Action="createLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AttachRetryCount" Value="3" />
+        <IniFile Id="CfgRetryDelay" Action="createLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AttachRetryDelaySeconds" Value="2" />
+        <IniFile Id="CfgLogPath" Action="createLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="LogPath" Value="[DATADIR]logs\broker.log" />
+        <IniFile Id="CfgStatePath" Action="createLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="StatePath" Value="[DATADIR]state.txt" />
+        <IniFile Id="CfgAuditLogPath" Action="createLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AuditLogPath" Value="[DATADIR]logs\audit.csv" />
+        <IniFile Id="CfgEventsEnabled" Action="createLine" Directory="DATADIR" Name="config.ini" Section="Events" Key="Enabled" Value="1" />
+        <IniFile Id="CfgEventsPort" Action="createLine" Directory="DATADIR" Name="config.ini" Section="Events" Key="Port" Value="[EVENTPORT]" />
       </Component>
 
       <Component Id="LogDirectoryComponent" Directory="LOGDIR" Guid="99BF5D29-9E94-4E0D-A3F3-E5D7B2239396">
@@ -177,6 +181,7 @@
 
       <!-- Entrada de auto-start na bandeja (HKLM – todos os usuários) -->
       <Component Id="TrayAutoStartComponent" Directory="TRAYDIR" Guid="E6C837A9-2D14-4F8B-9C56-B0F23E7A1D45">
+        <Condition>AUTOSTARTTRAY = "1"</Condition>
         <CreateFolder />
         <RegistryValue
             Root="HKLM"
@@ -186,6 +191,23 @@
             Value="[TRAYDIR]usbip_monitor.exe"
             KeyPath="yes"
             Action="write" />
+      </Component>
+
+      <Component Id="TrayCommonStartupShortcutComponent" Directory="CommonStartupFolder" Guid="F39F0E2A-B9B3-4764-A267-3D83257D8EF5">
+        <Condition>AUTOSTARTTRAY = "1"</Condition>
+        <Shortcut
+            Id="UsbipMonitorCommonStartupShortcut"
+            Name="USB-IP Monitor"
+            Description="USB/IP Monitor"
+            Target="[TRAYDIR]usbip_monitor.exe"
+            WorkingDirectory="TRAYDIR" />
+        <RegistryValue
+            Root="HKLM"
+            Key="SOFTWARE\ThinClient\UsbipSuite"
+            Name="CommonStartupShortcut"
+            Type="integer"
+            Value="1"
+            KeyPath="yes" />
       </Component>
     </ComponentGroup>
   </Fragment>

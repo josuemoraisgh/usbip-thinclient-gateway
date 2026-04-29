@@ -1,6 +1,7 @@
 ﻿import 'dart:async';
 import 'dart:ffi' hide Size;
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:ffi/ffi.dart';
@@ -10,12 +11,12 @@ import 'package:window_manager/window_manager.dart';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
-const _auditPath = r'C:\ProgramData\UsbipBrokerCpp\logs\audit.csv';
-const _mutexName = 'Global\\UsbipMonitorTray';
+const _statePath = r'C:\ProgramData\UsbipBrokerCpp\state.txt';
+const _mutexName = 'Local\\UsbipMonitorTray';
 
 // ─── Modelo ──────────────────────────────────────────────────────────────────
 
-class AuditEntry {
+class ConnectedDevice {
   final String timestamp;
   final String station;
   final String hostIp;
@@ -25,7 +26,7 @@ class AuditEntry {
   final String description;
   final String comPort;
 
-  const AuditEntry({
+  const ConnectedDevice({
     required this.timestamp,
     required this.station,
     required this.hostIp,
@@ -89,8 +90,8 @@ List<String> _parseCsvLine(String line) {
   return fields;
 }
 
-List<AuditEntry> _loadEntries() {
-  final file = File(_auditPath);
+List<ConnectedDevice> _loadConnectedDevices() {
+  final file = File(_statePath);
   if (!file.existsSync()) return [];
   final lines = file.readAsLinesSync();
   if (lines.length <= 1) return [];
@@ -100,7 +101,7 @@ List<AuditEntry> _loadEntries() {
       .map((l) {
         final cols = _parseCsvLine(l);
         if (cols.length < 8) return null;
-        return AuditEntry(
+        return ConnectedDevice(
           timestamp: cols[0],
           station: cols[1],
           hostIp: cols[2],
@@ -111,13 +112,43 @@ List<AuditEntry> _loadEntries() {
           comPort: cols[7],
         );
       })
-      .whereType<AuditEntry>()
-      .toList()
-      .reversed
+      .whereType<ConnectedDevice>()
       .toList();
 }
 
 // ─── Ícone da bandeja gerado em runtime ──────────────────────────────────────
+
+void _writeUint16Le(BytesBuilder builder, int value) {
+  builder.add([value & 0xFF, (value >> 8) & 0xFF]);
+}
+
+void _writeUint32Le(BytesBuilder builder, int value) {
+  builder.add([
+    value & 0xFF,
+    (value >> 8) & 0xFF,
+    (value >> 16) & 0xFF,
+    (value >> 24) & 0xFF,
+  ]);
+}
+
+Uint8List _pngToIco(Uint8List pngBytes) {
+  const headerSize = 6;
+  const directorySize = 16;
+  const imageOffset = headerSize + directorySize;
+  final builder = BytesBuilder();
+
+  _writeUint16Le(builder, 0);
+  _writeUint16Le(builder, 1);
+  _writeUint16Le(builder, 1);
+  builder.add([32, 32, 0, 0]);
+  _writeUint16Le(builder, 1);
+  _writeUint16Le(builder, 32);
+  _writeUint32Le(builder, pngBytes.length);
+  _writeUint32Le(builder, imageOffset);
+  builder.add(pngBytes);
+
+  return builder.toBytes();
+}
 
 Future<String> _makeTrayIconPath() async {
   final rec = ui.PictureRecorder();
@@ -150,8 +181,8 @@ Future<String> _makeTrayIconPath() async {
   final img = await rec.endRecording().toImage(32, 32);
   final bytes = await img.toByteData(format: ui.ImageByteFormat.png);
 
-  final path = '${Directory.systemTemp.path}\\usbip_tray.png';
-  await File(path).writeAsBytes(bytes!.buffer.asUint8List());
+  final path = '${Directory.systemTemp.path}\\usbip_tray.ico';
+  await File(path).writeAsBytes(_pngToIco(bytes!.buffer.asUint8List()));
   return path;
 }
 
@@ -160,7 +191,7 @@ Future<String> _makeTrayIconPath() async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Garante instância única na máquina via mutex com prefixo Global\
+  // Garante uma instância por sessão de usuário.
   if (!_acquireSingleInstance()) {
     exit(0);
   }
@@ -214,7 +245,7 @@ class _HomePage extends StatefulWidget {
 
 class _HomePageState extends State<_HomePage>
     with TrayListener, WindowListener {
-  List<AuditEntry> _entries = [];
+  List<ConnectedDevice> _entries = [];
   String _statusLine = 'Aguardando dados...';
   Timer? _timer;
 
@@ -264,20 +295,20 @@ class _HomePageState extends State<_HomePage>
   }
 
   void _refresh() {
-    final entries = _loadEntries();
+    final entries = _loadConnectedDevices();
     if (!mounted) return;
     setState(() {
       _entries = entries;
       if (entries.isEmpty) {
-        _statusLine = File(_auditPath).existsSync()
-            ? 'Nenhum registro no log de auditoria.'
-            : 'Arquivo n\u00e3o encontrado: $_auditPath';
+        _statusLine = File(_statePath).existsSync()
+            ? 'Nenhum dispositivo conectado agora.'
+            : 'Aguardando estado atual do broker.';
       } else {
         final now = DateTime.now();
         final hms =
             '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
         _statusLine =
-            '${entries.length} registro(s)  \u2022  \u00faltima leitura \u00e0s $hms';
+            '${entries.length} conectado(s) agora  \u2022  atualizado \u00e0s $hms';
       }
     });
   }
@@ -363,7 +394,7 @@ class _HomePageState extends State<_HomePage>
           Expanded(
             child: _entries.isEmpty
                 ? _EmptyState(message: _statusLine)
-                : _AuditTable(entries: _entries),
+                : _ConnectedTable(entries: _entries),
           ),
           _StatusBar(line: _statusLine),
         ],
@@ -423,7 +454,7 @@ class _StatusBar extends StatelessWidget {
   }
 }
 
-// ─── Tabela de auditoria ──────────────────────────────────────────────────────
+// ─── Tabela de conexões atuais ───────────────────────────────────────────────
 
 class _Col {
   final String label;
@@ -431,9 +462,9 @@ class _Col {
   const _Col(this.label, this.width);
 }
 
-class _AuditTable extends StatelessWidget {
-  final List<AuditEntry> entries;
-  const _AuditTable({required this.entries});
+class _ConnectedTable extends StatelessWidget {
+  final List<ConnectedDevice> entries;
+  const _ConnectedTable({required this.entries});
 
   static const _cols = [
     _Col('Data/Hora', 148),

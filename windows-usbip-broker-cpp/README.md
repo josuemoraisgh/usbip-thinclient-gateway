@@ -51,6 +51,22 @@ msiexec /i .\build\UsbipSuite-2.0.0-x64.msi THINCLIENTS="192.168.100.31,192.168.
 Se instalado sem `THINCLIENTS`, o broker ainda funciona por eventos enviados
 pelos thin clients Linux para a porta TCP 12000.
 
+## Atualizacao
+
+Para atualizar uma instalacao existente, execute o MSI novo por cima da versao
+instalada:
+
+```powershell
+msiexec /i .\build\UsbipSuite-2.0.0-x64.msi
+```
+
+O instalador aceita upgrade mesmo quando a versao exibida continua igual, para
+facilitar builds de correcao. Durante a atualizacao, o `config.ini` existente em
+`C:\ProgramData\UsbipBrokerCpp\config.ini` e preservado: o MSI cria apenas
+chaves ausentes com valores padrao e nao substitui valores alterados pelo
+usuario. Os binarios, servico, firewall e autostart continuam sendo atualizados
+pelo pacote novo.
+
 ## Arquivos instalados
 
 - Servico: `UsbipBrokerCpp`
@@ -58,6 +74,7 @@ pelos thin clients Linux para a porta TCP 12000.
 - Monitor: `C:\Program Files\UsbipSuite\monitor\usbip_monitor.exe`
 - INF WinUSB padrao: `C:\Program Files\UsbipSuite\drivers\usbip-winusb.inf`
 - Configuracao: `C:\ProgramData\UsbipBrokerCpp\config.ini`
+- Estado atual do tray: `C:\ProgramData\UsbipBrokerCpp\state.txt`
 - Logs: `C:\ProgramData\UsbipBrokerCpp\logs\broker.log`
 - Auditoria COM/estacao: `C:\ProgramData\UsbipBrokerCpp\logs\audit.csv`
 

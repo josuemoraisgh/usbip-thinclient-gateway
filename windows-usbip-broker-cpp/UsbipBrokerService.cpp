@@ -348,6 +348,22 @@ std::string ExtractComPort(const std::string& text) {
     return {};
 }
 
+std::string CsvEscape(std::string value) {
+    if (value.find(',') == std::string::npos && value.find('"') == std::string::npos) {
+        return value;
+    }
+    std::string escaped;
+    escaped.reserve(value.size() + 2);
+    for (char ch : value) {
+        if (ch == '"') {
+            escaped += "\"\"";
+        } else {
+            escaped.push_back(ch);
+        }
+    }
+    return "\"" + escaped + "\"";
+}
+
 // Grava uma linha no audit log CSV com a rastreabilidade COM x estacao.
 // Cria o cabecalho na primeira vez que o arquivo e criado.
 void WriteAuditEntry(const std::wstring& auditPath,
@@ -377,27 +393,13 @@ void WriteAuditEntry(const std::wstring& auditPath,
     char timestamp[64] = {};
     std::snprintf(timestamp, sizeof(timestamp), "%04u-%02u-%02u %02u:%02u:%02u",
                   now.wYear, now.wMonth, now.wDay, now.wHour, now.wMinute, now.wSecond);
-    // Escapa a descricao para CSV (aspas duplas se houver virgula ou aspas)
-    std::string desc = description;
-    if (desc.find(',') != std::string::npos || desc.find('"') != std::string::npos) {
-        std::string escaped;
-        escaped.reserve(desc.size() + 2);
-        for (char ch : desc) {
-            if (ch == '"') {
-                escaped += "\"\"";
-            } else {
-                escaped += ch;
-            }
-        }
-        desc = "\"" + escaped + "\"";
-    }
     file << timestamp << ","
-         << stationName << ","
+         << CsvEscape(stationName) << ","
          << host << ","
          << busid << ","
          << vid << ","
          << pid << ","
-         << desc << ","
+         << CsvEscape(description) << ","
          << (comPort.empty() ? "?" : comPort) << "\r\n";
 }
 
@@ -726,6 +728,52 @@ void AuditDeviceOnce(const Config& config,
                     device.vid, device.pid, device.description, comPort);
 }
 
+void WriteCurrentState(const Config& config, const std::vector<RemoteDevice>& devices) {
+    struct StateRow {
+        RemoteDevice device;
+        std::string station;
+        std::string comPort;
+    };
+    std::vector<StateRow> rows;
+    rows.reserve(devices.size());
+    for (const RemoteDevice& device : devices) {
+        rows.push_back({device, ResolveStationName(config, device.host),
+                        FindPresentComPortForVidPid(config, device.vid, device.pid)});
+    }
+
+    std::lock_guard<std::mutex> lock(g_logMutex);
+    EnsureDirectoryForFile(config.statePath);
+
+    std::wstring tempPath = config.statePath + L".tmp";
+    std::ofstream file(WideToUtf8(tempPath), std::ios::trunc | std::ios::binary);
+    if (!file) {
+        return;
+    }
+
+    SYSTEMTIME now = {};
+    GetLocalTime(&now);
+    char timestamp[64] = {};
+    std::snprintf(timestamp, sizeof(timestamp), "%04u-%02u-%02u %02u:%02u:%02u",
+                  now.wYear, now.wMonth, now.wDay, now.wHour, now.wMinute, now.wSecond);
+
+    file << "timestamp,station,host_ip,busid,vid,pid,description,com_port\r\n";
+    for (const StateRow& row : rows) {
+        const RemoteDevice& device = row.device;
+        file << timestamp << ","
+             << CsvEscape(row.station) << ","
+             << device.host << ","
+             << device.busid << ","
+             << device.vid << ","
+             << device.pid << ","
+             << CsvEscape(device.description) << ","
+             << (row.comPort.empty() ? "?" : row.comPort) << "\r\n";
+    }
+    file.close();
+
+    DeleteFileW(config.statePath.c_str());
+    MoveFileExW(tempPath.c_str(), config.statePath.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+}
+
 std::wstring ResolveWinUsbInf(const Config& config, const WinUsbRule& rule) {
     if (!rule.driverInf.empty()) {
         return rule.driverInf;
@@ -960,7 +1008,9 @@ bool AttachDevice(const Config& config, const RemoteDevice& device) {
 int ScanOnce(const Config& config, const std::string& targetHost = "", const std::string& targetBusid = "") {
     std::set<std::string> attached = AttachedKeys(config);
     int attachedCount = 0;
-    for (const RemoteDevice& device : AttachedDevices(config)) {
+    std::vector<RemoteDevice> attachedDevices = AttachedDevices(config);
+    WriteCurrentState(config, attachedDevices);
+    for (const RemoteDevice& device : attachedDevices) {
         if ((!targetHost.empty() && Lower(device.host) != Lower(targetHost)) ||
             (!targetBusid.empty() && device.busid != targetBusid)) {
             continue;
@@ -993,6 +1043,9 @@ int ScanOnce(const Config& config, const std::string& targetHost = "", const std
                 attached.insert(key);
             }
         }
+    }
+    if (attachedCount > 0) {
+        WriteCurrentState(config, AttachedDevices(config));
     }
     return attachedCount;
 }

@@ -147,6 +147,16 @@ sudo bash ./linux-usbip-manager/install.sh --server-ip 192.168.100.10
 .\windows-cleanup.ps1 -KeepData
 ```
 
+Para atualizar sem apagar a configuracao atual:
+
+```powershell
+msiexec /i "windows-usbip-broker-cpp\build\UsbipSuite-2.0.0-x64.msi"
+```
+
+O MSI novo roda como upgrade por cima da instalacao existente e preserva
+`C:\ProgramData\UsbipBrokerCpp\config.ini`, mantendo alteracoes feitas pelo
+usuario. Ele so cria chaves que estiverem faltando.
+
 ### Linux
 
 ```bash
@@ -195,6 +205,16 @@ C:\ProgramData\UsbipBrokerCpp\logs\audit.csv
 
 Colunas: `timestamp`, `station`, `host_ip`, `busid`, `vid`, `pid`, `description`, `com_port`
 
+O estado atual, usado pelo monitor de bandeja, fica em:
+
+```
+C:\ProgramData\UsbipBrokerCpp\state.txt
+```
+
+Esse arquivo e reescrito a cada varredura com apenas os dispositivos conectados
+no momento. Quando um dispositivo sai do `usbip port`, ele tambem sai da
+listagem do tray.
+
 Para configurar os nomes das estações, edite `C:\ProgramData\UsbipBrokerCpp\config.ini`:
 
 ```ini
@@ -203,5 +223,5 @@ Para configurar os nomes das estações, edite `C:\ProgramData\UsbipBrokerCpp\co
 192.168.100.32=Estacao-02
 ```
 
-O monitor de bandeja lê esse CSV e exibe a tabela ao clicar no ícone na barra de tarefas.
+O monitor de bandeja le o estado atual e exibe a tabela ao clicar no icone na barra de tarefas.
 
