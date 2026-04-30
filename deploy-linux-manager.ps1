@@ -527,6 +527,7 @@ $script:UsbipAllowedRules = @(
     @{ Vid = "303a"; Pid = "*" },
     @{ Vid = "10c4"; Pid = "ea60" },
     @{ Vid = "1a86"; Pid = "7523" },
+    @{ Vid = "1a86"; Pid = "55d3" },
     @{ Vid = "0403"; Pid = "6010" },
     @{ Vid = "0403"; Pid = "6001" }
 )
@@ -653,7 +654,7 @@ function Update-WindowsBrokerConfig {
     }
     $text = Get-Content -LiteralPath $cfg -Raw
     $changed = $false
-    $allowed = "AllowedDevices=303a:1001,303a:*,10c4:ea60,1a86:7523,0403:6010,0403:6001"
+    $allowed = "AllowedDevices=303a:1001,303a:*,10c4:ea60,1a86:7523,1a86:55d3,0403:6010,0403:6001"
     $blocked = "BlockedDevices=1d6b:*,2a7a:9a18,10c4:8105"
     $pollInterval = "PollIntervalSeconds=5"
     $commandTimeout = "CommandTimeoutSeconds=5"

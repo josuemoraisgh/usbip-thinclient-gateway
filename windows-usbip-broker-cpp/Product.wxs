@@ -118,7 +118,7 @@
         <IniFile Id="CfgUsbipPath" Action="createLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="UsbipPath" Value="[USBIPPATH]" />
         <IniFile Id="CfgThinClients" Action="createLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="ThinClients" Value="[THINCLIENTS]" />
         <IniFile Id="CfgAttachPolicy" Action="createLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AttachPolicy" Value="[ATTACHPOLICY]" />
-        <IniFile Id="CfgAllowedDevices" Action="createLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AllowedDevices" Value="303a:1001,303a:*,10c4:ea60,1a86:7523,0403:6010,0403:6001" />
+        <IniFile Id="CfgAllowedDevices" Action="createLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AllowedDevices" Value="303a:1001,303a:*,10c4:ea60,1a86:7523,1a86:55d3,0403:6010,0403:6001" />
         <IniFile Id="CfgBlockedDevices" Action="createLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="BlockedDevices" Value="1d6b:*,2a7a:9a18,10c4:8105" />
         <IniFile Id="CfgPollInterval" Action="createLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="PollIntervalSeconds" Value="[POLLTIME]" />
         <IniFile Id="CfgCommandTimeout" Action="createLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="CommandTimeoutSeconds" Value="25" />
@@ -179,15 +179,20 @@
         <File Id="ShaderStretchEffect" Source="$(var.TrayDir)\data\flutter_assets\shaders\stretch_effect.frag" />
       </Component>
 
-      <!-- Entrada de auto-start na bandeja (HKLM – todos os usuários) -->
-      <Component Id="TrayAutoStartComponent" Directory="TRAYDIR" Guid="E6C837A9-2D14-4F8B-9C56-B0F23E7A1D45" Condition='AUTOSTARTTRAY = "1"'>
+      <!-- Remove autostart legado via HKLM Run. O tray por usuario usa o StartupFolder comum. -->
+      <Component Id="TrayAutoStartComponent" Directory="TRAYDIR" Guid="E6C837A9-2D14-4F8B-9C56-B0F23E7A1D45">
         <CreateFolder />
-        <RegistryValue
+        <RemoveRegistryValue
             Root="HKLM"
             Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
             Name="UsbipMonitor"
-            Type="string"
-            Value="[TRAYDIR]usbip_monitor.exe"
+            Action="removeOnInstall" />
+        <RegistryValue
+            Root="HKLM"
+            Key="SOFTWARE\ThinClient\UsbipSuite"
+            Name="HklmRunCleaned"
+            Type="integer"
+            Value="1"
             KeyPath="yes"
             Action="write" />
       </Component>

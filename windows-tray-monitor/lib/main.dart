@@ -12,6 +12,7 @@ import 'package:window_manager/window_manager.dart';
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
 const _statePath = r'C:\ProgramData\UsbipBrokerCpp\state.txt';
+const _auditPath = r'C:\ProgramData\UsbipBrokerCpp\logs\audit.csv';
 const _mutexName = 'Local\\UsbipMonitorTray';
 
 // ─── Modelo ──────────────────────────────────────────────────────────────────
@@ -91,11 +92,13 @@ List<String> _parseCsvLine(String line) {
 }
 
 List<ConnectedDevice> _loadConnectedDevices() {
-  final file = File(_statePath);
+  final file = File(_statePath).existsSync()
+      ? File(_statePath)
+      : File(_auditPath);
   if (!file.existsSync()) return [];
   final lines = file.readAsLinesSync();
   if (lines.length <= 1) return [];
-  return lines
+  final entries = lines
       .skip(1)
       .where((l) => l.trim().isNotEmpty)
       .map((l) {
@@ -114,6 +117,18 @@ List<ConnectedDevice> _loadConnectedDevices() {
       })
       .whereType<ConnectedDevice>()
       .toList();
+  if (file.path == _statePath) {
+    return entries;
+  }
+  final seen = <String>{};
+  final latest = <ConnectedDevice>[];
+  for (final entry in entries.reversed) {
+    final key = '${entry.hostIp}/${entry.busid}';
+    if (seen.add(key)) {
+      latest.add(entry);
+    }
+  }
+  return latest.reversed.toList();
 }
 
 // ─── Ícone da bandeja gerado em runtime ──────────────────────────────────────
@@ -256,7 +271,7 @@ class _HomePageState extends State<_HomePage>
     windowManager.addListener(this);
     _initTray();
     _refresh();
-    _timer = Timer.periodic(const Duration(seconds: 10), (_) => _refresh());
+    _timer = Timer.periodic(const Duration(seconds: 3), (_) => _refresh());
   }
 
   @override
@@ -300,7 +315,7 @@ class _HomePageState extends State<_HomePage>
     setState(() {
       _entries = entries;
       if (entries.isEmpty) {
-        _statusLine = File(_statePath).existsSync()
+        _statusLine = File(_statePath).existsSync() || File(_auditPath).existsSync()
             ? 'Nenhum dispositivo conectado agora.'
             : 'Aguardando estado atual do broker.';
       } else {

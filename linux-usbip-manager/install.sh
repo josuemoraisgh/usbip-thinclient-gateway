@@ -438,6 +438,7 @@ write_config() {
     {"vid": "303a", "pid": "*", "name": "Espressif devices"},
     {"vid": "10c4", "pid": "ea60", "name": "Silicon Labs CP210x"},
     {"vid": "1a86", "pid": "7523", "name": "WCH CH340/CH341"},
+    {"vid": "1a86", "pid": "55d3", "name": "WCH USB Single Serial"},
     {"vid": "0403", "pid": "6010", "name": "ESP-PROG / FTDI FT2232H"},
     {"vid": "0403", "pid": "6001", "name": "FTDI FT232"}
   ],
@@ -550,6 +551,7 @@ ACTION=="add|change", SUBSYSTEM=="usb", DEVTYPE=="usb_device", ATTR{idVendor}=="
 ACTION=="add|change", SUBSYSTEM=="usb", DEVTYPE=="usb_device", ATTR{idVendor}=="303a", ATTR{idProduct}=="*", ENV{ID_MM_DEVICE_IGNORE}="1", ENV{BRLTTY_BRAILLE_DRIVER}="ignore"
 ACTION=="add|change", SUBSYSTEM=="usb", DEVTYPE=="usb_device", ATTR{idVendor}=="10c4", ATTR{idProduct}=="ea60", ENV{ID_MM_DEVICE_IGNORE}="1", ENV{BRLTTY_BRAILLE_DRIVER}="ignore"
 ACTION=="add|change", SUBSYSTEM=="usb", DEVTYPE=="usb_device", ATTR{idVendor}=="1a86", ATTR{idProduct}=="7523", ENV{ID_MM_DEVICE_IGNORE}="1", ENV{BRLTTY_BRAILLE_DRIVER}="ignore"
+ACTION=="add|change", SUBSYSTEM=="usb", DEVTYPE=="usb_device", ATTR{idVendor}=="1a86", ATTR{idProduct}=="55d3", ENV{ID_MM_DEVICE_IGNORE}="1", ENV{BRLTTY_BRAILLE_DRIVER}="ignore"
 ACTION=="add|change", SUBSYSTEM=="usb", DEVTYPE=="usb_device", ATTR{idVendor}=="0403", ATTR{idProduct}=="6010", ENV{ID_MM_DEVICE_IGNORE}="1", ENV{BRLTTY_BRAILLE_DRIVER}="ignore"
 ACTION=="add|change", SUBSYSTEM=="usb", DEVTYPE=="usb_device", ATTR{idVendor}=="0403", ATTR{idProduct}=="6001", ENV{ID_MM_DEVICE_IGNORE}="1", ENV{BRLTTY_BRAILLE_DRIVER}="ignore"
 

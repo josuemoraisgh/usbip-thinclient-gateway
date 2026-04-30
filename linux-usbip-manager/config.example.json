@@ -22,6 +22,11 @@
       "name": "WCH CH340/CH341"
     },
     {
+      "vid": "1a86",
+      "pid": "55d3",
+      "name": "WCH USB Single Serial"
+    },
+    {
       "vid": "0403",
       "pid": "6010",
       "name": "ESP-PROG / FTDI FT2232H"

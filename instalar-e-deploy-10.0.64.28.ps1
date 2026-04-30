@@ -46,6 +46,10 @@ $msiArgs = @(
 Start-Process -FilePath "msiexec.exe" -ArgumentList $msiArgs -Wait -NoNewWindow
 
 Write-Host ""
+Write-Host "==> Instalando sincronizador leve do estado do Tray..."
+& (Join-Path $PSScriptRoot "windows-usbip-broker-cpp\install-state-sync.ps1")
+
+Write-Host ""
 Write-Host "==> Fazendo deploy do linux-usbip-manager nas thin clients..."
 & (Join-Path $PSScriptRoot "deploy-linux-manager.ps1") `
     -ThinClients $thinClients `

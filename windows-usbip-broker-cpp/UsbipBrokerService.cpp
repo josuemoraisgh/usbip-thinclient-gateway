@@ -448,7 +448,7 @@ Config LoadConfig(const std::wstring& configPath) {
     config.attachRetryCount = std::max(1, ReadIniInt(configPath, L"Broker", L"AttachRetryCount", 3));
     config.attachRetryDelaySeconds = std::max(1, ReadIniInt(configPath, L"Broker", L"AttachRetryDelaySeconds", 2));
     config.thinClients = Split(ReadIniString(configPath, L"Broker", L"ThinClients", L""), ',');
-    config.allowedDevices = ParseRules(ReadIniString(configPath, L"Broker", L"AllowedDevices", L"303a:1001,303a:*,10c4:ea60,1a86:7523,0403:6010,0403:6001"));
+    config.allowedDevices = ParseRules(ReadIniString(configPath, L"Broker", L"AllowedDevices", L"303a:1001,303a:*,10c4:ea60,1a86:7523,1a86:55d3,0403:6010,0403:6001"));
     config.blockedDevices = ParseRules(ReadIniString(configPath, L"Broker", L"BlockedDevices", L"1d6b:*,2a7a:9a18,10c4:8105"));
     config.eventListenerEnabled = ReadIniBool(configPath, L"Events", L"Enabled", true);
     config.eventPort = std::max(1, ReadIniInt(configPath, L"Events", L"Port", 12000));
@@ -741,37 +741,46 @@ void WriteCurrentState(const Config& config, const std::vector<RemoteDevice>& de
                         FindPresentComPortForVidPid(config, device.vid, device.pid)});
     }
 
-    std::lock_guard<std::mutex> lock(g_logMutex);
-    EnsureDirectoryForFile(config.statePath);
+    DWORD moveError = ERROR_SUCCESS;
+    {
+        std::lock_guard<std::mutex> lock(g_logMutex);
+        EnsureDirectoryForFile(config.statePath);
 
-    std::wstring tempPath = config.statePath + L".tmp";
-    std::ofstream file(WideToUtf8(tempPath), std::ios::trunc | std::ios::binary);
-    if (!file) {
-        return;
+        std::wstring tempPath = config.statePath + L".tmp";
+        std::ofstream file(WideToUtf8(tempPath), std::ios::trunc | std::ios::binary);
+        if (!file) {
+            return;
+        }
+
+        SYSTEMTIME now = {};
+        GetLocalTime(&now);
+        char timestamp[64] = {};
+        std::snprintf(timestamp, sizeof(timestamp), "%04u-%02u-%02u %02u:%02u:%02u",
+                      now.wYear, now.wMonth, now.wDay, now.wHour, now.wMinute, now.wSecond);
+
+        file << "timestamp,station,host_ip,busid,vid,pid,description,com_port\r\n";
+        for (const StateRow& row : rows) {
+            const RemoteDevice& device = row.device;
+            file << timestamp << ","
+                 << CsvEscape(row.station) << ","
+                 << device.host << ","
+                 << device.busid << ","
+                 << device.vid << ","
+                 << device.pid << ","
+                 << CsvEscape(device.description) << ","
+                 << (row.comPort.empty() ? "?" : row.comPort) << "\r\n";
+        }
+        file.close();
+
+        DeleteFileW(config.statePath.c_str());
+        if (!MoveFileExW(tempPath.c_str(), config.statePath.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+            moveError = GetLastError();
+        }
     }
-
-    SYSTEMTIME now = {};
-    GetLocalTime(&now);
-    char timestamp[64] = {};
-    std::snprintf(timestamp, sizeof(timestamp), "%04u-%02u-%02u %02u:%02u:%02u",
-                  now.wYear, now.wMonth, now.wDay, now.wHour, now.wMinute, now.wSecond);
-
-    file << "timestamp,station,host_ip,busid,vid,pid,description,com_port\r\n";
-    for (const StateRow& row : rows) {
-        const RemoteDevice& device = row.device;
-        file << timestamp << ","
-             << CsvEscape(row.station) << ","
-             << device.host << ","
-             << device.busid << ","
-             << device.vid << ","
-             << device.pid << ","
-             << CsvEscape(device.description) << ","
-             << (row.comPort.empty() ? "?" : row.comPort) << "\r\n";
+    if (moveError != ERROR_SUCCESS) {
+        LogLine(config.logPath, "WARN", "Could not write state file " + WideToUtf8(config.statePath) +
+                ": Win32 error " + std::to_string(moveError));
     }
-    file.close();
-
-    DeleteFileW(config.statePath.c_str());
-    MoveFileExW(tempPath.c_str(), config.statePath.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
 }
 
 std::wstring ResolveWinUsbInf(const Config& config, const WinUsbRule& rule) {

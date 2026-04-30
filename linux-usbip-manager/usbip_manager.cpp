@@ -83,6 +83,7 @@ struct Config {
         {"303a", "*", "*", "Espressif devices"},
         {"10c4", "ea60", "*", "Silicon Labs CP210x"},
         {"1a86", "7523", "*", "WCH CH340/CH341"},
+        {"1a86", "55d3", "*", "WCH USB Single Serial"},
         {"0403", "6010", "*", "ESP-PROG / FTDI FT2232H"},
         {"0403", "6001", "*", "FTDI FT232"},
     };
