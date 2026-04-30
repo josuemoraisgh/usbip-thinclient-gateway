@@ -41,7 +41,7 @@
         <Control Id="EventPortLabel" Type="Text" X="20" Y="159" Width="150" Height="15" Text="Porta TCP de eventos:" />
         <Control Id="EventPortEdit" Type="Edit" X="20" Y="176" Width="80" Height="18" Property="EVENTPORT" />
 
-        <Control Id="AutoStartLabel" Type="Text" X="20" Y="206" Width="280" Height="15" Text="Iniciar monitor na bandeja junto com o Windows:" />
+        <Control Id="AutoStartLabel" Type="Text" X="20" Y="206" Width="280" Height="15" Text="Iniciar icone do monitor junto com o Windows:" />
         <Control Id="AutoStartCheck" Type="CheckBox" X="305" Y="206" Width="18" Height="15" Property="AUTOSTARTTRAY" CheckBoxValue="1" />
 
         <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
@@ -78,7 +78,7 @@
         <Directory Id="LOGDIR" Name="logs" />
       </Directory>
     </StandardDirectory>
-    <StandardDirectory Id="StartupFolder" />
+    <StandardDirectory Id="CommonStartupFolder" />
 
     <Feature Id="MainFeature" Title="USB/IP Suite" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
@@ -142,6 +142,12 @@
               KeyPath="yes" />
       </Component>
 
+      <Component Id="TrayLauncherComponent" Directory="TRAYDIR" Guid="B1B951B3-18A4-4E15-A1F8-A1358E7D2E0F">
+        <File Id="TrayLauncherExe"
+              Source="$(var.SourceDir)\UsbipTrayLauncher.exe"
+              KeyPath="yes" />
+      </Component>
+
       <!-- DLLs raiz do Flutter -->
       <Component Id="TrayMonitorDllsComponent" Directory="TRAYDIR" Guid="D3A59B6E-1F7C-4E2B-B034-A8D621C4F897">
         <File Id="FlutterDll"            Source="$(var.TrayDir)\flutter_windows.dll" />
@@ -179,7 +185,7 @@
         <File Id="ShaderStretchEffect" Source="$(var.TrayDir)\data\flutter_assets\shaders\stretch_effect.frag" />
       </Component>
 
-      <!-- Remove autostart legado via HKLM Run. O tray por usuario usa o StartupFolder comum. -->
+      <!-- Remove autostart legado via HKLM Run. O tray por usuario usa o Startup comum. -->
       <Component Id="TrayAutoStartComponent" Directory="TRAYDIR" Guid="E6C837A9-2D14-4F8B-9C56-B0F23E7A1D45">
         <CreateFolder />
         <RemoveRegistryValue
@@ -197,12 +203,12 @@
             Action="write" />
       </Component>
 
-      <Component Id="TrayCommonStartupShortcutComponent" Directory="StartupFolder" Guid="F39F0E2A-B9B3-4764-A267-3D83257D8EF5" Condition='AUTOSTARTTRAY = "1"'>
+      <Component Id="TrayCommonStartupShortcutComponent" Directory="CommonStartupFolder" Guid="F39F0E2A-B9B3-4764-A267-3D83257D8EF5" Condition='AUTOSTARTTRAY = "1"'>
         <Shortcut
             Id="UsbipMonitorCommonStartupShortcut"
             Name="USB-IP Monitor"
             Description="USB/IP Monitor"
-            Target="[TRAYDIR]usbip_monitor.exe"
+            Target="[TRAYDIR]UsbipTrayLauncher.exe"
             WorkingDirectory="TRAYDIR" />
         <RegistryValue
             Root="HKLM"

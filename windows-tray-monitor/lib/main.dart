@@ -1,12 +1,8 @@
 ﻿import 'dart:async';
 import 'dart:ffi' hide Size;
 import 'dart:io';
-import 'dart:typed_data';
-import 'dart:ui' as ui;
-
 import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
-import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
@@ -131,76 +127,6 @@ List<ConnectedDevice> _loadConnectedDevices() {
   return latest.reversed.toList();
 }
 
-// ─── Ícone da bandeja gerado em runtime ──────────────────────────────────────
-
-void _writeUint16Le(BytesBuilder builder, int value) {
-  builder.add([value & 0xFF, (value >> 8) & 0xFF]);
-}
-
-void _writeUint32Le(BytesBuilder builder, int value) {
-  builder.add([
-    value & 0xFF,
-    (value >> 8) & 0xFF,
-    (value >> 16) & 0xFF,
-    (value >> 24) & 0xFF,
-  ]);
-}
-
-Uint8List _pngToIco(Uint8List pngBytes) {
-  const headerSize = 6;
-  const directorySize = 16;
-  const imageOffset = headerSize + directorySize;
-  final builder = BytesBuilder();
-
-  _writeUint16Le(builder, 0);
-  _writeUint16Le(builder, 1);
-  _writeUint16Le(builder, 1);
-  builder.add([32, 32, 0, 0]);
-  _writeUint16Le(builder, 1);
-  _writeUint16Le(builder, 32);
-  _writeUint32Le(builder, pngBytes.length);
-  _writeUint32Le(builder, imageOffset);
-  builder.add(pngBytes);
-
-  return builder.toBytes();
-}
-
-Future<String> _makeTrayIconPath() async {
-  final rec = ui.PictureRecorder();
-  final canvas = Canvas(rec);
-
-  canvas.drawRRect(
-    RRect.fromRectAndRadius(
-      const Rect.fromLTWH(0, 0, 32, 32),
-      const Radius.circular(5),
-    ),
-    Paint()..color = const Color(0xFF1565C0),
-  );
-
-  final stroke = Paint()
-    ..color = Colors.white
-    ..strokeWidth = 2.0
-    ..style = PaintingStyle.stroke;
-
-  // Símbolo USB simplificado
-  canvas.drawLine(const Offset(16, 5), const Offset(16, 20), stroke);
-  canvas.drawLine(const Offset(10, 13), const Offset(22, 13), stroke);
-  canvas.drawLine(const Offset(10, 13), const Offset(10, 19), stroke);
-  canvas.drawLine(const Offset(22, 13), const Offset(22, 19), stroke);
-
-  final dot = Paint()..color = Colors.white;
-  canvas.drawCircle(const Offset(16, 5), 2.5, dot);
-  canvas.drawCircle(const Offset(10, 21), 3.0, dot);
-  canvas.drawCircle(const Offset(22, 21), 3.0, dot);
-
-  final img = await rec.endRecording().toImage(32, 32);
-  final bytes = await img.toByteData(format: ui.ImageByteFormat.png);
-
-  final path = '${Directory.systemTemp.path}\\usbip_tray.ico';
-  await File(path).writeAsBytes(_pngToIco(bytes!.buffer.asUint8List()));
-  return path;
-}
-
 // ─── Ponto de entrada ────────────────────────────────────────────────────────
 
 Future<void> main() async {
@@ -222,9 +148,10 @@ Future<void> main() async {
   );
 
   await windowManager.waitUntilReadyToShow(opts, () async {
-    await windowManager.setPreventClose(true);
+    await windowManager.setPreventClose(false);
     await windowManager.setMinimumSize(const Size(680, 380));
-    await windowManager.hide();
+    await windowManager.show();
+    await windowManager.focus();
   });
 
   runApp(const _App());
@@ -258,8 +185,7 @@ class _HomePage extends StatefulWidget {
   State<_HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<_HomePage>
-    with TrayListener, WindowListener {
+class _HomePageState extends State<_HomePage> with WindowListener {
   List<ConnectedDevice> _entries = [];
   String _statusLine = 'Aguardando dados...';
   Timer? _timer;
@@ -267,9 +193,7 @@ class _HomePageState extends State<_HomePage>
   @override
   void initState() {
     super.initState();
-    trayManager.addListener(this);
     windowManager.addListener(this);
-    _initTray();
     _refresh();
     _timer = Timer.periodic(const Duration(seconds: 3), (_) => _refresh());
   }
@@ -277,36 +201,8 @@ class _HomePageState extends State<_HomePage>
   @override
   void dispose() {
     _timer?.cancel();
-    trayManager.removeListener(this);
     windowManager.removeListener(this);
     super.dispose();
-  }
-
-  Future<void> _initTray() async {
-    final iconPath = await _makeTrayIconPath();
-    await trayManager.setIcon(iconPath);
-    await trayManager.setToolTip(
-      'USB/IP Monitor \u2013 COM \u00d7 Esta\u00e7\u00e3o',
-    );
-    await _rebuildTrayMenu();
-  }
-
-  Future<void> _rebuildTrayMenu() async {
-    final visible = await windowManager.isVisible();
-    await trayManager.setContextMenu(
-      Menu(
-        items: [
-          MenuItem(
-            key: 'toggle',
-            label: visible ? 'Ocultar janela' : 'Mostrar janela',
-          ),
-          MenuItem.separator(),
-          MenuItem(key: 'refresh', label: 'Atualizar agora'),
-          MenuItem.separator(),
-          MenuItem(key: 'exit', label: 'Sair do monitor'),
-        ],
-      ),
-    );
   }
 
   void _refresh() {
@@ -328,51 +224,10 @@ class _HomePageState extends State<_HomePage>
     });
   }
 
-  Future<void> _toggleWindow() async {
-    if (await windowManager.isVisible()) {
-      await windowManager.hide();
-    } else {
-      await windowManager.show();
-      await windowManager.focus();
-    }
-    await _rebuildTrayMenu();
-  }
-
-  Future<void> _exitApp() async {
-    await trayManager.destroy();
-    await windowManager.setPreventClose(false);
-    await windowManager.close();
-  }
-
-  // ── TrayListener ─────────────────────────────────────────────────────────
-
-  @override
-  void onTrayIconMouseDown() => _toggleWindow();
-
-  @override
-  void onTrayIconRightMouseDown() {
-    _rebuildTrayMenu().then((_) => trayManager.popUpContextMenu());
-  }
-
-  @override
-  void onTrayMenuItemClick(MenuItem item) {
-    switch (item.key) {
-      case 'toggle':
-        _toggleWindow();
-      case 'refresh':
-        _refresh();
-      case 'exit':
-        _exitApp();
-    }
-  }
-
   // ── WindowListener ────────────────────────────────────────────────────────
 
   @override
-  void onWindowClose() {
-    // Esconde para a bandeja em vez de encerrar o processo
-    windowManager.hide().then((_) => _rebuildTrayMenu());
-  }
+  void onWindowMinimize() => windowManager.close();
 
   // ── UI ───────────────────────────────────────────────────────────────────
 
@@ -398,9 +253,8 @@ class _HomePageState extends State<_HomePage>
           ),
           IconButton(
             icon: const Icon(Icons.minimize, size: 18),
-            tooltip: 'Minimizar para a bandeja',
-            onPressed: () =>
-                windowManager.hide().then((_) => _rebuildTrayMenu()),
+            tooltip: 'Fechar janela',
+            onPressed: () => windowManager.close(),
           ),
         ],
       ),

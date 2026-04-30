@@ -7,7 +7,7 @@ Sistema completo para exportar dispositivos USB de thin clients Linux e importá
 | Componente | Diretório | Descrição |
 |---|---|---|
 | **Broker C++** | `windows-usbip-broker-cpp/` | Serviço Windows que conecta nas thin clients e anexa os dispositivos USB/IP |
-| **Monitor de bandeja** | `windows-tray-monitor/` | App Flutter (system tray) que exibe a relação COM × estação em tempo real |
+| **Monitor de bandeja** | `windows-tray-monitor/` + `UsbipTrayLauncher.exe` | Launcher leve no tray por usuário; a janela Flutter abre sob demanda |
 | **Manager Linux** | `linux-usbip-manager/` | Daemon C++ nas thin clients que exporta os dispositivos via `usbipd` |
 | **MSI unificado** | `windows-usbip-broker-cpp/build/` | Instalador que entrega o broker + monitor de bandeja em uma única etapa |
 
@@ -23,13 +23,15 @@ Sistema completo para exportar dispositivos USB de thin clients Linux e importá
 # (Administrador) — limpa instalações antigas
 .\windows-cleanup.ps1
 
-# Instala o broker e o monitor de bandeja
+# Instala o broker e o icone leve do monitor na bandeja
 msiexec /i "windows-usbip-broker-cpp\build\UsbipSuite-2.0.0-x64.msi" `
     THINCLIENTS="192.168.100.31,192.168.100.32" `
     USBIPPATH="C:\usbip\usbip.exe"
 ```
 
 O assistente de instalação também pode ser aberto com duplo clique no `.msi`.
+O tray iniciado no login e um launcher nativo leve; ele abre a janela do monitor
+somente quando o usuario clica no icone.
 
 ### 2. Thin clients Linux (deploy remoto a partir do Windows Server)
 

@@ -65,6 +65,9 @@ if ($SkipFlutter) {
 $source = Join-Path $root "UsbipBrokerService.cpp"
 $exe    = Join-Path $buildDir "UsbipBrokerService.exe"
 $obj    = Join-Path $buildDir "UsbipBrokerService.obj"
+$trayLauncherSource = Join-Path $root "UsbipTrayLauncher.cpp"
+$trayLauncherExe    = Join-Path $buildDir "UsbipTrayLauncher.exe"
+$trayLauncherObj    = Join-Path $buildDir "UsbipTrayLauncher.obj"
 
 if ($SkipCpp) {
     Write-Host "`nPulando compilação C++ (--SkipCpp)."
@@ -77,12 +80,15 @@ if ($SkipCpp) {
 call "$devCmd" -arch=x64 -host_arch=x64
 if errorlevel 1 exit /b %errorlevel%
 cl.exe /nologo /EHsc /std:c++17 /O2 /MT /Fo"$obj" /Fe"$exe" "$source" ws2_32.lib advapi32.lib
+if errorlevel 1 exit /b %errorlevel%
+cl.exe /nologo /EHsc /std:c++17 /O2 /MT /Fo"$trayLauncherObj" /Fe"$trayLauncherExe" "$trayLauncherSource" user32.lib shell32.lib gdiplus.lib gdi32.lib
 exit /b %errorlevel%
 "@ | Set-Content -LiteralPath $cmdFile -Encoding ASCII
 
     cmd.exe /d /c "`"$cmdFile`""
     if ($LASTEXITCODE -ne 0) { throw "Compilação C++ falhou." }
     Write-Host "Compilado: $exe"
+    Write-Host "Compilado: $trayLauncherExe"
 }
 
 # ─── Etapa 3: WiX MSI unificado ───────────────────────────────────────────────
@@ -91,6 +97,10 @@ Write-Host "`n==> Gerando MSI unificado (USB/IP Suite)..."
 
 if (-not (Test-Path -LiteralPath $exe)) {
     throw "UsbipBrokerService.exe não encontrado em '$buildDir'. Compile o C++ primeiro."
+}
+
+if (-not (Test-Path -LiteralPath $trayLauncherExe)) {
+    throw "UsbipTrayLauncher.exe nao encontrado em '$buildDir'. Compile o C++ primeiro."
 }
 
 $trayExeForWix = Join-Path $trayDestDir "usbip_monitor.exe"
@@ -113,6 +123,7 @@ if ($LASTEXITCODE -ne 0) { throw "WiX build falhou." }
 
 Write-Host "`nPronto!"
 Write-Host "  Broker exe : $exe"
+Write-Host "  Tray exe   : $trayLauncherExe"
 Write-Host "  MSI        : $msi"
 Write-Host ""
 Write-Host "Para instalar:"

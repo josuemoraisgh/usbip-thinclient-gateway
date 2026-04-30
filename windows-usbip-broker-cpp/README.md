@@ -71,7 +71,8 @@ pelo pacote novo.
 
 - Servico: `UsbipBrokerCpp`
 - Binario: `C:\Program Files\UsbipSuite\UsbipBrokerService.exe`
-- Monitor: `C:\Program Files\UsbipSuite\monitor\usbip_monitor.exe`
+- Icone leve do tray: `C:\Program Files\UsbipSuite\monitor\UsbipTrayLauncher.exe`
+- Janela do monitor: `C:\Program Files\UsbipSuite\monitor\usbip_monitor.exe`
 - INF WinUSB padrao: `C:\Program Files\UsbipSuite\drivers\usbip-winusb.inf`
 - Configuracao: `C:\ProgramData\UsbipBrokerCpp\config.ini`
 - Estado atual do tray: `C:\ProgramData\UsbipBrokerCpp\state.txt`
@@ -134,6 +135,13 @@ usbip.exe port
 
 O MSI instala o broker, o servico, a configuracao, a regra de firewall e um INF
 padrao para politica WinUSB. Ele nao instala o cliente/importador USB/IP.
+
+## Tray por usuario
+
+O autostart instala um launcher nativo leve no Startup comum do Windows. Cada
+usuario logado fica apenas com esse icone no tray. Ao clicar no icone, ele abre
+ou foca `usbip_monitor.exe`; ao fechar/minimizar a janela, o Flutter encerra e o
+icone continua no tray pelo launcher.
 
 No Windows Server ainda e necessario ter:
 
