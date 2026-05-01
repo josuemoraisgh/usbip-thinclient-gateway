@@ -97,7 +97,7 @@ function Get-ComPortMap {
         $productId = $null
         $usbipPort = $null
 
-        if ($instance -match 'VID_([0-9A-Fa-f]{4})&PID_([0-9A-Fa-f]{4})\\.*&0&([0-9]+)$') {
+        if ($instance -match 'VID_([0-9A-Fa-f]{4})&PID_([0-9A-Fa-f]{4})(?:&MI_[0-9A-Fa-f]{2})?\\.*&0&([0-9]+)$') {
             $vid = $matches[1].ToLowerInvariant()
             $productId = $matches[2].ToLowerInvariant()
             $usbipPort = [int]$matches[3]
