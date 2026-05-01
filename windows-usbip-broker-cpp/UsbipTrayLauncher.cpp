@@ -8,6 +8,7 @@
 #include <propidl.h>
 #include <shellapi.h>
 #include <gdiplus.h>
+#include <tlhelp32.h>
 
 #include <cwchar>
 #include <iterator>
@@ -27,6 +28,9 @@ constexpr UINT kTrayId = 1;
 constexpr UINT kTrayCallback = WM_APP + 1;
 constexpr UINT kMenuOpen = 1001;
 constexpr UINT kMenuExit = 1002;
+// Stable tray identity. Prevents duplicate icons after upgrades/restarts.
+constexpr GUID kTrayGuid =
+    {0x7b3a77b8, 0x3f1f, 0x4e89, {0xa0, 0xa2, 0x1e, 0x64, 0x8f, 0x44, 0xd4, 0x5d}};
 
 UINT g_taskbarCreated = 0;
 HICON g_icon = nullptr;
@@ -105,6 +109,33 @@ HWND FindMonitorWindow() {
     return found;
 }
 
+void KillMonitorProcesses() {
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) {
+        return;
+    }
+
+    PROCESSENTRY32W entry = {};
+    entry.dwSize = sizeof(entry);
+    if (!Process32FirstW(snapshot, &entry)) {
+        CloseHandle(snapshot);
+        return;
+    }
+
+    do {
+        if (_wcsicmp(entry.szExeFile, kMonitorExe) != 0) {
+            continue;
+        }
+        HANDLE process = OpenProcess(PROCESS_TERMINATE, FALSE, entry.th32ProcessID);
+        if (process) {
+            TerminateProcess(process, 0);
+            CloseHandle(process);
+        }
+    } while (Process32NextW(snapshot, &entry));
+
+    CloseHandle(snapshot);
+}
+
 void FocusMonitorWindow(HWND hwnd) {
     if (!hwnd) {
         return;
@@ -119,6 +150,8 @@ void OpenMonitor() {
         FocusMonitorWindow(existing);
         return;
     }
+
+    KillMonitorProcesses();
 
     std::wstring exe = MonitorPath();
     std::wstring directory = ExeDirectory();
@@ -143,12 +176,15 @@ void AddTrayIcon(HWND hwnd) {
     g_nid.cbSize = sizeof(g_nid);
     g_nid.hWnd = hwnd;
     g_nid.uID = kTrayId;
-    g_nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
+    g_nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_GUID;
     g_nid.uCallbackMessage = kTrayCallback;
     g_nid.hIcon = g_icon;
+    g_nid.guidItem = kTrayGuid;
     wcscpy_s(g_nid.szTip, kTooltip);
 
-    Shell_NotifyIconW(NIM_ADD, &g_nid);
+    if (!Shell_NotifyIconW(NIM_ADD, &g_nid)) {
+        Shell_NotifyIconW(NIM_MODIFY, &g_nid);
+    }
     g_nid.uVersion = NOTIFYICON_VERSION_4;
     Shell_NotifyIconW(NIM_SETVERSION, &g_nid);
 }
@@ -223,6 +259,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     if (Gdiplus::GdiplusStartup(&g_gdiplusToken, &gdiplusInput, nullptr) != Gdiplus::Ok) {
         return 1;
     }
+
+    KillMonitorProcesses();
 
     g_taskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
 
