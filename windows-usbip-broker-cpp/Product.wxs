@@ -78,7 +78,7 @@
         <Directory Id="LOGDIR" Name="logs" />
       </Directory>
     </StandardDirectory>
-    <StandardDirectory Id="CommonStartupFolder" />
+    <StandardDirectory Id="StartupFolder" />
 
     <Feature Id="MainFeature" Title="USB/IP Suite" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
@@ -201,7 +201,7 @@
             Action="write" />
       </Component>
 
-      <Component Id="TrayLauncherCommonStartupShortcutComponent" Directory="CommonStartupFolder" Guid="2B87E87D-9A91-44B7-A3F5-79BB1E26344E" Condition='AUTOSTARTTRAY = "1"'>
+      <Component Id="TrayLauncherCommonStartupShortcutComponent" Directory="StartupFolder" Guid="2B87E87D-9A91-44B7-A3F5-79BB1E26344E" Condition='AUTOSTARTTRAY = "1"'>
         <RemoveFile
             Id="RemoveOldUsbipMonitorStartupShortcut"
             Name="USB-IP Monitor.lnk"
