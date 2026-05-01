@@ -97,16 +97,20 @@ function Get-ComPortMap {
         $productId = $null
         $usbipPort = $null
 
-        if ($instance -match 'VID_([0-9A-Fa-f]{4})&PID_([0-9A-Fa-f]{4})(?:&MI_[0-9A-Fa-f]{2})?\\.*&0&([0-9]+)$') {
+        if ($instance -match 'VID_([0-9A-Fa-f]{4})&PID_([0-9A-Fa-f]{4})(?:&MI_[0-9A-Fa-f]{2})?') {
             $vid = $matches[1].ToLowerInvariant()
             $productId = $matches[2].ToLowerInvariant()
-            $usbipPort = [int]$matches[3]
         } elseif ($instance -match 'VID_([0-9A-Fa-f]{4})\+PID_([0-9A-Fa-f]{4})') {
             $vid = $matches[1].ToLowerInvariant()
             $productId = $matches[2].ToLowerInvariant()
         }
 
         if ($vid -and $productId) {
+            $addressProperty = Get-PnpDeviceProperty -InstanceId $instance -KeyName 'DEVPKEY_Device_Address' -ErrorAction SilentlyContinue
+            if ($addressProperty -and $null -ne $addressProperty.Data) {
+                $usbipPort = [int]$addressProperty.Data
+            }
+
             $vidPidKey = ('{0}:{1}' -f $vid, $productId)
             if (-not $byVidPid.ContainsKey($vidPidKey)) {
                 $byVidPid[$vidPidKey] = New-Object System.Collections.Generic.List[string]

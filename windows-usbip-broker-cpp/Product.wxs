@@ -150,6 +150,8 @@
       <!-- ── System Tray Monitor (Flutter) ───────────────────────────────── -->
       <Component Id="WinUsbDriverInfComponent" Directory="DRIVERDIR" Guid="91E880E9-63E8-46C6-982E-1CF3C6D2C37D">
         <File Id="WinUsbDriverInf" Source="$(var.SourceRoot)\drivers\usbip-winusb.inf" KeyPath="yes" />
+        <File Id="WinUsbDriverCat" Source="$(var.SourceRoot)\drivers\usbip-winusb.cat" />
+        <File Id="WinUsbDriverTestCert" Source="$(var.SourceRoot)\drivers\UsbipSuiteTestDriverSigning.cer" />
       </Component>
 
       <Component Id="TrayMonitorComponent" Directory="TRAYDIR" Guid="B8F4A21D-6C3E-4D9A-A823-C741E5D89F12">
