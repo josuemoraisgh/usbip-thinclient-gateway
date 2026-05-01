@@ -4,6 +4,8 @@
 #define NOMINMAX
 
 #include <windows.h>
+#include <objidl.h>
+#include <propidl.h>
 #include <shellapi.h>
 #include <gdiplus.h>
 

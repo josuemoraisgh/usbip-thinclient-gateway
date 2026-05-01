@@ -78,7 +78,7 @@
         <Directory Id="LOGDIR" Name="logs" />
       </Directory>
     </StandardDirectory>
-    <StandardDirectory Id="CommonStartupFolder" />
+    <StandardDirectory Id="StartupFolder" />
 
     <Feature Id="MainFeature" Title="USB/IP Suite" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
@@ -191,8 +191,7 @@
         <RemoveRegistryValue
             Root="HKLM"
             Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
-            Name="UsbipMonitor"
-            Action="removeOnInstall" />
+            Name="UsbipMonitor" />
         <RegistryValue
             Root="HKLM"
             Key="SOFTWARE\ThinClient\UsbipSuite"
@@ -203,7 +202,7 @@
             Action="write" />
       </Component>
 
-      <Component Id="TrayCommonStartupShortcutComponent" Directory="CommonStartupFolder" Guid="F39F0E2A-B9B3-4764-A267-3D83257D8EF5" Condition='AUTOSTARTTRAY = "1"'>
+      <Component Id="TrayCommonStartupShortcutComponent" Directory="StartupFolder" Guid="F39F0E2A-B9B3-4764-A267-3D83257D8EF5" Condition='AUTOSTARTTRAY = "1"'>
         <Shortcut
             Id="UsbipMonitorCommonStartupShortcut"
             Name="USB-IP Monitor"
