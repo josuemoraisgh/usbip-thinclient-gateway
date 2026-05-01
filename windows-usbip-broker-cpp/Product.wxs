@@ -78,7 +78,7 @@
         <Directory Id="LOGDIR" Name="logs" />
       </Directory>
     </StandardDirectory>
-    <StandardDirectory Id="StartupFolder" />
+    <StandardDirectory Id="CommonStartupFolder" />
 
     <Feature Id="MainFeature" Title="USB/IP Suite" Level="1">
       <ComponentGroupRef Id="ProductComponents" />
@@ -152,7 +152,6 @@
       <Component Id="TrayMonitorDllsComponent" Directory="TRAYDIR" Guid="D3A59B6E-1F7C-4E2B-B034-A8D621C4F897">
         <File Id="FlutterDll"            Source="$(var.TrayDir)\flutter_windows.dll" />
         <File Id="ScreenRetrieverDll"    Source="$(var.TrayDir)\screen_retriever_windows_plugin.dll" />
-        <File Id="TrayManagerDll"        Source="$(var.TrayDir)\tray_manager_plugin.dll" />
         <File Id="WindowManagerDll"      Source="$(var.TrayDir)\window_manager_plugin.dll" />
       </Component>
 
@@ -202,17 +201,25 @@
             Action="write" />
       </Component>
 
-      <Component Id="TrayCommonStartupShortcutComponent" Directory="StartupFolder" Guid="F39F0E2A-B9B3-4764-A267-3D83257D8EF5" Condition='AUTOSTARTTRAY = "1"'>
+      <Component Id="TrayLauncherCommonStartupShortcutComponent" Directory="CommonStartupFolder" Guid="2B87E87D-9A91-44B7-A3F5-79BB1E26344E" Condition='AUTOSTARTTRAY = "1"'>
+        <RemoveFile
+            Id="RemoveOldUsbipMonitorStartupShortcut"
+            Name="USB-IP Monitor.lnk"
+            On="install" />
+        <RemoveFile
+            Id="RemoveOldUsbipMonitorExeStartupShortcut"
+            Name="usbip_monitor.lnk"
+            On="install" />
         <Shortcut
-            Id="UsbipMonitorCommonStartupShortcut"
-            Name="USB-IP Monitor"
+            Id="UsbipTrayLauncherCommonStartupShortcut"
+            Name="USB-IP Tray Launcher"
             Description="USB/IP Monitor"
             Target="[TRAYDIR]UsbipTrayLauncher.exe"
             WorkingDirectory="TRAYDIR" />
         <RegistryValue
             Root="HKLM"
             Key="SOFTWARE\ThinClient\UsbipSuite"
-            Name="CommonStartupShortcut"
+            Name="TrayLauncherCommonStartupShortcut"
             Type="integer"
             Value="1"
             KeyPath="yes" />

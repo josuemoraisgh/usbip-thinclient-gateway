@@ -30,7 +30,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  tray_manager: ^0.2.3
   window_manager: ^0.4.3
   ffi: ^2.1.3
 
