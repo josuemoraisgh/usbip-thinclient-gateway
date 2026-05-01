@@ -36,6 +36,7 @@ UINT g_taskbarCreated = 0;
 HICON g_icon = nullptr;
 ULONG_PTR g_gdiplusToken = 0;
 NOTIFYICONDATAW g_nid = {};
+ULONGLONG g_lastOpenTick = 0;
 
 std::wstring ExeDirectory() {
     wchar_t path[MAX_PATH] = {};
@@ -109,6 +110,42 @@ HWND FindMonitorWindow() {
     return found;
 }
 
+DWORD CurrentSessionId() {
+    DWORD sessionId = 0;
+    ProcessIdToSessionId(GetCurrentProcessId(), &sessionId);
+    return sessionId;
+}
+
+bool MonitorProcessExistsInCurrentSession() {
+    DWORD currentSession = CurrentSessionId();
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+
+    PROCESSENTRY32W entry = {};
+    entry.dwSize = sizeof(entry);
+    if (!Process32FirstW(snapshot, &entry)) {
+        CloseHandle(snapshot);
+        return false;
+    }
+
+    bool found = false;
+    do {
+        if (_wcsicmp(entry.szExeFile, kMonitorExe) != 0) {
+            continue;
+        }
+        DWORD sessionId = 0;
+        if (ProcessIdToSessionId(entry.th32ProcessID, &sessionId) && sessionId == currentSession) {
+            found = true;
+            break;
+        }
+    } while (Process32NextW(snapshot, &entry));
+
+    CloseHandle(snapshot);
+    return found;
+}
+
 void KillMonitorProcesses() {
     HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snapshot == INVALID_HANDLE_VALUE) {
@@ -141,17 +178,57 @@ void FocusMonitorWindow(HWND hwnd) {
         return;
     }
     ShowWindow(hwnd, SW_RESTORE);
+
+    RECT windowRect = {};
+    GetWindowRect(hwnd, &windowRect);
+    int width = windowRect.right - windowRect.left;
+    int height = windowRect.bottom - windowRect.top;
+    if (width <= 0) {
+        width = 940;
+    }
+    if (height <= 0) {
+        height = 540;
+    }
+
+    HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO monitorInfo = {};
+    monitorInfo.cbSize = sizeof(monitorInfo);
+    if (GetMonitorInfoW(monitor, &monitorInfo)) {
+        RECT work = monitorInfo.rcWork;
+        int workWidth = work.right - work.left;
+        int workHeight = work.bottom - work.top;
+        if (width > workWidth) {
+            width = workWidth;
+        }
+        if (height > workHeight) {
+            height = workHeight;
+        }
+        int x = work.left + (workWidth - width) / 2;
+        int y = work.top + (workHeight - height) / 2;
+        SetWindowPos(hwnd, nullptr, x, y, width, height,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+
     SetForegroundWindow(hwnd);
 }
 
 void OpenMonitor() {
+    ULONGLONG now = GetTickCount64();
+    if (now - g_lastOpenTick < 1500) {
+        return;
+    }
+    g_lastOpenTick = now;
+
     HWND existing = FindMonitorWindow();
     if (existing) {
         FocusMonitorWindow(existing);
         return;
     }
 
-    KillMonitorProcesses();
+    if (MonitorProcessExistsInCurrentSession()) {
+        return;
+    }
+
 
     std::wstring exe = MonitorPath();
     std::wstring directory = ExeDirectory();
@@ -222,7 +299,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) 
         return 0;
 
     case kTrayCallback:
-        if (LOWORD(lParam) == WM_LBUTTONUP || LOWORD(lParam) == WM_LBUTTONDBLCLK) {
+        if (LOWORD(lParam) == WM_LBUTTONUP) {
             OpenMonitor();
         } else if (LOWORD(lParam) == WM_RBUTTONUP || LOWORD(lParam) == WM_CONTEXTMENU) {
             ShowContextMenu(hwnd);
