@@ -62,6 +62,7 @@
 
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="UsbipSuite">
+        <Directory Id="DRIVERDIR" Name="drivers" />
         <Directory Id="TRAYDIR" Name="monitor">
           <Directory Id="TRAYDATADIR" Name="data">
             <Directory Id="TRAYASSETSDIR" Name="flutter_assets">
@@ -129,6 +130,17 @@
         <IniFile Id="CfgAuditLogPath" Action="createLine" Directory="DATADIR" Name="config.ini" Section="Broker" Key="AuditLogPath" Value="[DATADIR]logs\audit.csv" />
         <IniFile Id="CfgEventsEnabled" Action="createLine" Directory="DATADIR" Name="config.ini" Section="Events" Key="Enabled" Value="1" />
         <IniFile Id="CfgEventsPort" Action="createLine" Directory="DATADIR" Name="config.ini" Section="Events" Key="Port" Value="[EVENTPORT]" />
+        <IniFile Id="CfgWinUsbEnabled" Action="createLine" Directory="DATADIR" Name="config.ini" Section="WinUSB" Key="Enabled" Value="1" />
+        <IniFile Id="CfgWinUsbDefaultDriverInf" Action="createLine" Directory="DATADIR" Name="config.ini" Section="WinUSB" Key="DefaultDriverInf" Value="[DRIVERDIR]usbip-winusb.inf" />
+        <IniFile Id="CfgWinUsbSettleSeconds" Action="createLine" Directory="DATADIR" Name="config.ini" Section="WinUSB" Key="SettleSeconds" Value="3" />
+        <IniFile Id="CfgWinUsbRetryCount" Action="createLine" Directory="DATADIR" Name="config.ini" Section="WinUSB" Key="RetryCount" Value="2" />
+        <IniFile Id="CfgWinUsbRules" Action="createLine" Directory="DATADIR" Name="config.ini" Section="WinUSB" Key="Rules" Value="ESP32S3_NATIVE_JTAG,ESP_PROG_FT2232_JTAG" />
+        <IniFile Id="CfgWinUsbEsp32Description" Action="createLine" Directory="DATADIR" Name="config.ini" Section="WinUSB.ESP32S3_NATIVE_JTAG" Key="Description" Value="ESP32-S3 native USB Serial/JTAG - somente interface JTAG" />
+        <IniFile Id="CfgWinUsbEsp32Pattern" Action="createLine" Directory="DATADIR" Name="config.ini" Section="WinUSB.ESP32S3_NATIVE_JTAG" Key="Pattern" Value="USB\VID_303A&amp;PID_1001&amp;MI_02*" />
+        <IniFile Id="CfgWinUsbEsp32DriverInf" Action="createLine" Directory="DATADIR" Name="config.ini" Section="WinUSB.ESP32S3_NATIVE_JTAG" Key="DriverInf" Value="" />
+        <IniFile Id="CfgWinUsbEspProgDescription" Action="createLine" Directory="DATADIR" Name="config.ini" Section="WinUSB.ESP_PROG_FT2232_JTAG" Key="Description" Value="ESP-PROG FT2232H channel A - JTAG/OpenOCD" />
+        <IniFile Id="CfgWinUsbEspProgPattern" Action="createLine" Directory="DATADIR" Name="config.ini" Section="WinUSB.ESP_PROG_FT2232_JTAG" Key="Pattern" Value="USB\VID_0403&amp;PID_6010&amp;MI_00*" />
+        <IniFile Id="CfgWinUsbEspProgDriverInf" Action="createLine" Directory="DATADIR" Name="config.ini" Section="WinUSB.ESP_PROG_FT2232_JTAG" Key="DriverInf" Value="" />
       </Component>
 
       <Component Id="LogDirectoryComponent" Directory="LOGDIR" Guid="99BF5D29-9E94-4E0D-A3F3-E5D7B2239396">
@@ -136,6 +148,10 @@
       </Component>
 
       <!-- ── System Tray Monitor (Flutter) ───────────────────────────────── -->
+      <Component Id="WinUsbDriverInfComponent" Directory="DRIVERDIR" Guid="91E880E9-63E8-46C6-982E-1CF3C6D2C37D">
+        <File Id="WinUsbDriverInf" Source="$(var.SourceRoot)\drivers\usbip-winusb.inf" KeyPath="yes" />
+      </Component>
+
       <Component Id="TrayMonitorComponent" Directory="TRAYDIR" Guid="B8F4A21D-6C3E-4D9A-A823-C741E5D89F12">
         <File Id="TrayMonitorExe"
               Source="$(var.TrayDir)\usbip_monitor.exe"

@@ -10,17 +10,12 @@ $repoTrayDir = Join-Path $PSScriptRoot "build\tray"
 $commonStartup = [Environment]::GetFolderPath("CommonStartup")
 $launcherShortcut = Join-Path $commonStartup "USB-IP Tray Launcher.lnk"
 
-if (-not (Test-Path -LiteralPath $launcher)) {
-    if (-not (Test-Path -LiteralPath $repoLauncher)) {
-        throw "Launcher nao encontrado em '$launcher' nem em '$repoLauncher'. Execute .\build.ps1 e depois rode este script novamente."
-    }
+if (-not (Test-Path -LiteralPath $repoLauncher)) {
+    throw "Launcher nao encontrado em '$repoLauncher'. Execute .\build.ps1 e depois rode este script novamente."
+}
 
-    if (-not (Test-Path -LiteralPath $installDir)) {
-        New-Item -ItemType Directory -Force -Path $installDir | Out-Null
-    }
-
-    Write-Host "Copiando launcher para a pasta instalada..."
-    Copy-Item -LiteralPath $repoLauncher -Destination $launcher -Force
+if (-not (Test-Path -LiteralPath $installDir)) {
+    New-Item -ItemType Directory -Force -Path $installDir | Out-Null
 }
 
 Write-Host "Encerrando janelas Flutter antigas e launchers anteriores..."
@@ -34,6 +29,9 @@ if (Test-Path -LiteralPath $repoTrayDir) {
 } else {
     Write-Warning "Build Flutter nao encontrado em '$repoTrayDir'. Execute .\build.ps1 para gerar a janela atualizada."
 }
+
+Write-Host "Atualizando launcher instalado..."
+Copy-Item -LiteralPath $repoLauncher -Destination $launcher -Force
 
 Write-Host "Removendo autostart antigo..."
 $runKeys = @(
