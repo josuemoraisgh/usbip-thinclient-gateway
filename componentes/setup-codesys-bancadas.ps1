@@ -186,6 +186,16 @@ foreach ($Usuario in $Usuarios) {
             Write-Warning "Arquivo nao encontrado: $CfgTemplate"
         }
 
+        # 7b. Ajusta tambem [SysTarget] NodeName no CODESYSControl.cfg da raiz
+        # (CfgRaiz) - e o arquivo passado via "-d" pelo atalho .bat desta
+        # bancada. Sem isso, o Gateway mostra o nome do computador
+        # (ex.: FEELT-LASEC) em vez do nome da bancada, ate a 1a copia do
+        # template para a WorkingDirectory acontecer.
+        if (Test-Path $CfgRaiz) {
+            Set-CodesysTarget -CfgPath $CfgRaiz -NodeName $Usuario -Port $PortaWebServer
+            Write-Host "NodeName configurado (raiz): $Usuario (webserver na porta $PortaWebServer)"
+        }
+
         # 8 e 9. Cria o atalho .bat na Area de Trabalho do usuario
         if (Test-Path $Desktop) {
             $Exe = Join-Path $DestinoUsuario "CODESYSControlService.exe"
