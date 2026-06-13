@@ -22,6 +22,7 @@ componentes/                <- TUDO que e instalado/executado fica aqui
   amd_chipset_software_8.05.04.516.exe  <- driver de chipset AMD (B550/AM4)
   7z2601-x64.exe
   Anaconda3-2025.12-2-Windows-x86_64.exe
+  LibreOffice_26.2.4_Win_x86-64.msi
   CODESYS 64 3.5.21.0.exe
   Scada-LTS_v2.7.8.1_Installer_v2.1.0_Setup.exe
   process_simul-v0.0.7-windows.msi
@@ -31,10 +32,9 @@ msi-installer/               <- fonte do WinFullInstall.msi (WiX Toolset)
   Product.wxs
 ```
 
-> O `Install-All.ps1` referencia os arquivos de `componentes/` pelo caminho
-> absoluto `C:\Prof_Jouse\00Instal\WinFullInstall\componentes`. Por isso, para
-> o instalador funcionar, **este repositorio precisa estar clonado exatamente
-> nesse caminho** no servidor.
+> O `Install-All.ps1` localiza automaticamente a pasta `componentes/` ao lado
+> do proprio script ou nos caminhos conhecidos do repositorio. Tambem aceita
+> o parametro `-SourceDir` para informar outro caminho.
 
 > **Instaladores grandes (nao versionados)**: os arquivos abaixo excedem o
 > limite de 100MB do GitHub e estao listados no `.gitignore` - precisam ser
@@ -45,6 +45,7 @@ msi-installer/               <- fonte do WinFullInstall.msi (WiX Toolset)
 > - `ININDUFU-Setup.exe`
 > - `OpenJDK21U-jdk_x64_windows_hotspot_21.0.7_6.msi`
 > - `Scada-LTS_v2.7.8.1_Installer_v2.1.0_Setup.exe`
+> - `LibreOffice_26.2.4_Win_x86-64.msi`
 
 ## Como instalar
 
@@ -63,7 +64,7 @@ Se preferir, e possivel rodar tudo manualmente a qualquer momento, sem o
 `.msi`:
 
 ```powershell
-cd C:\Prof_Jouse\00Instal\WinFullInstall\componentes
+cd <repositorio>\componentes
 .\Install-All.ps1
 ```
 
@@ -91,31 +92,34 @@ Log completo de cada execucao:
 6. **Anaconda3** - instala `Anaconda3-2025.12-2-Windows-x86_64.exe`
    silenciosamente, para todos os usuarios, em `C:\ProgramData\Anaconda3`
    (`/InstallationType=AllUsers /AddToPath=1 /RegisterPython=1 /S /D=...`).
-7. **CODESYS 64 3.5.21.0** - executa `CODESYS 64 3.5.21.0.exe` (instalador
+7. **LibreOffice 26.2.4** - instala
+   `LibreOffice_26.2.4_Win_x86-64.msi` silenciosamente para todos os usuarios
+   (`/qn /norestart ALLUSERS=1`).
+8. **CODESYS 64 3.5.21.0** - executa `CODESYS 64 3.5.21.0.exe` (instalador
    interativo da IDE + runtime "Control Win V3 x64").
-8. **Scada-LTS Setup** - executa
+9. **Scada-LTS Setup** - executa
    `Scada-LTS_v2.7.8.1_Installer_v2.1.0_Setup.exe`.
-9. **Scada-LTS isolado por bancada** - roda `setup-scadalts-bancadas.ps1`,
+10. **Scada-LTS isolado por bancada** - roda `setup-scadalts-bancadas.ps1`,
    criando 8 instancias Tomcat e 8 bancos MySQL independentes: 7 para
    `bancada204a-01` a `bancada204a-07` e uma para o professor.
-10. **process_simul (MSI)** - instala `process_simul-v0.0.7-windows.msi`.
-11. **ININDUFU Setup** - executa `ININDUFU-Setup.exe`.
-12. **USB/IP ThinClient Gateway** - roda
+11. **process_simul (MSI)** - instala `process_simul-v0.0.7-windows.msi`.
+12. **ININDUFU Setup** - executa `ININDUFU-Setup.exe`.
+13. **USB/IP ThinClient Gateway** - roda
    `usbip-thinclient-gateway\windows-usbip-broker-cpp\instalar.ps1`
    (instala `usbipd-win` + o broker/monitor de bandeja do gateway USB/IP).
-13. **Configurar-Laboratorio-RDS** - roda `Configurar-Laboratorio-RDS.ps1`
+14. **Configurar-Laboratorio-RDS** - roda `Configurar-Laboratorio-RDS.ps1`
    (configura AD DS + RDS e cria os 23 usuarios das bancadas). E o **ultimo**
    passo porque pode reiniciar o servidor varias vezes.
-14. **CODESYS Control Win por bancada** - roda
+15. **CODESYS Control Win por bancada** - roda
    `setup-codesys-bancadas.ps1` (cria uma instancia isolada do runtime
    CODESYS para cada uma das 23 bancadas).
-15. **Organizar Desktops do laboratorio** - roda
+16. **Organizar Desktops do laboratorio** - roda
     `organizar-desktops-laboratorio.ps1`, deixando no Desktop do professor
     apenas controles operacionais e agrupando os atalhos gerais dos alunos
     em uma pasta **Aplicativos do Laboratorio**.
 
-Itens 7, 8 e 10 (instaladores `.exe` interativos sem argumentos) e os MSIs
-(item 4 e 9) sao executados via `Invoke-Installer`/`Invoke-Msi` com
+Itens 8, 9 e 12 (instaladores `.exe` interativos sem argumentos) e os MSIs
+(itens 4, 7 e 11) sao executados via `Invoke-Installer`/`Invoke-Msi` com
 `Start-Process -Wait`, aguardando o usuario concluir o assistente na tela.
 
 > **Nota sobre o driver NVIDIA em Windows Server**: drivers GeForce sao
@@ -151,8 +155,9 @@ O orquestrador principal (ver [seção acima](#o-que-o-install-allps1-faz-ordem-
 para a ordem completa). Detalhes de implementacao:
 
 - `#Requires -RunAsAdministrator` - precisa rodar elevado.
-- `$SourceDir = 'C:\Prof_Jouse\00Instal\WinFullInstall\componentes'` -
-  caminho fixo de onde tudo e lido.
+- `-SourceDir` - caminho opcional da pasta `componentes`. Sem o parametro, o
+  script usa a propria pasta quando executado manualmente ou procura os
+  caminhos conhecidos do repositorio quando iniciado pelo MSI.
 - Abre uma transcricao (`Start-Transcript`) em
   `C:\ProgramData\WinFullInstall\install-all.log` (modo `-Append`), entao
   cada execucao acumula no mesmo arquivo.
@@ -163,7 +168,8 @@ para a ordem completa). Detalhes de implementacao:
 - `Invoke-Installer` - roda um `.exe` de `componentes/` com
   `Start-Process -Wait`. So passa `-ArgumentList` se houver argumentos (um
   array vazio faz o `Start-Process` lancar erro).
-- `Invoke-Msi` - roda `msiexec /i "<caminho>" <argumentos>` com `-Wait`.
+- `Invoke-Msi` - roda `msiexec /i "<caminho>" <argumentos>` com `-Wait` e
+  valida o codigo de saida (`0` ou `3010`).
 - `Invoke-Script` - executa outro `.ps1` de `componentes/` (com `&`),
   passando argumentos adicionais se houver.
 - No final, imprime um resumo, encerra a transcricao e espera uma tecla
@@ -415,6 +421,7 @@ gateway e nao fazem parte do fluxo do `Install-All.ps1` - veja
 | `OpenJDK21U-jdk_x64_windows_hotspot_21.0.7_6.msi` | OpenJDK 21 (Java), requerido pelo Scada-LTS. |
 | `7z2601-x64.exe` | 7-Zip (compactador de arquivos). |
 | `Anaconda3-2025.12-2-Windows-x86_64.exe` | Distribuicao Python Anaconda3, instalada para todos os usuarios. |
+| `LibreOffice_26.2.4_Win_x86-64.msi` | Suite de escritorio LibreOffice 26.2.4, instalada silenciosamente. |
 | `CODESYS 64 3.5.21.0.exe` | IDE + runtime CODESYS 3.5.21.0 (Control Win V3 x64). |
 | `Scada-LTS_v2.7.8.1_Installer_v2.1.0_Setup.exe` | Plataforma SCADA Scada-LTS. |
 | `process_simul-v0.0.7-windows.msi` | Simulador de processos do laboratorio. |

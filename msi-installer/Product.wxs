@@ -1,17 +1,12 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-  <Product Id="*"
-           Name="WinFullInstall - Laboratorio FEELT"
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="WinFullInstall - Laboratorio FEELT"
            Language="1046"
            Version="1.0.0.0"
            Manufacturer="FEELT/LASEC"
            UpgradeCode="2D556EBA-1500-4590-B277-A6F4794905F3">
 
-    <Package InstallerVersion="500"
-             Compressed="yes"
-             InstallScope="perMachine"
-             Description="Instala/executa todos os componentes do laboratorio (driver NVIDIA GTX 1650, driver de chipset AMD B550, OpenJDK, 7-Zip, Anaconda3, CODESYS, Scada-LTS, process_simul, ININDUFU, USB/IP ThinClient Gateway) e configura o servidor (AD DS + RDS)."
-             Comments="Requer que a pasta C:\Prof_Jouse\00Instal\WinFullInstall\componentes com todos os instaladores esteja presente." />
+    <SummaryInformation
+        Description="Instala/executa todos os componentes do laboratorio (driver NVIDIA GTX 1650, driver de chipset AMD B550, OpenJDK, 7-Zip, Anaconda3, LibreOffice, CODESYS, Scada-LTS, process_simul, ININDUFU, USB/IP ThinClient Gateway) e configura o servidor (AD DS + RDS)." />
 
     <MajorUpgrade DowngradeErrorMessage="Uma versao mais recente do WinFullInstall ja esta instalada." />
 
@@ -19,14 +14,13 @@
 
     <Property Id="ARPNOMODIFY" Value="1" />
 
-    <Directory Id="TARGETDIR" Name="SourceDir">
-      <Directory Id="ProgramFilesFolder">
-        <Directory Id="INSTALLFOLDER" Name="WinFullInstall" />
-      </Directory>
-      <Directory Id="ProgramMenuFolder">
-        <Directory Id="ApplicationProgramsFolder" Name="WinFullInstall" />
-      </Directory>
-    </Directory>
+    <StandardDirectory Id="ProgramFilesFolder">
+      <Directory Id="INSTALLFOLDER" Name="WinFullInstall" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="WinFullInstall" />
+    </StandardDirectory>
 
     <DirectoryRef Id="INSTALLFOLDER">
       <Component Id="InstallAllScript" Guid="C591D928-A96C-44D9-943E-310967C7987A">
@@ -46,7 +40,12 @@
                   Arguments="-NoProfile -ExecutionPolicy Bypass -WindowStyle Normal -File &quot;[INSTALLFOLDER]Launch-Elevated.ps1&quot;"
                   WorkingDirectory="INSTALLFOLDER" />
         <RemoveFolder Id="RemoveApplicationProgramsFolder" On="uninstall" />
-        <RegistryValue Root="HKCU" Key="Software\FEELT\WinFullInstall" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+        <RegistryValue Root="HKCU"
+                       Key="Software\FEELT\WinFullInstall"
+                       Name="installed"
+                       Type="integer"
+                       Value="1"
+                       KeyPath="yes" />
       </Component>
     </DirectoryRef>
 
@@ -67,8 +66,10 @@
                   Return="asyncNoWait" />
 
     <InstallExecuteSequence>
-      <Custom Action="LaunchInstallAll" After="InstallFinalize">NOT Installed AND NOT REMOVE</Custom>
+      <Custom Action="LaunchInstallAll"
+              After="InstallFinalize"
+              Condition="NOT Installed AND NOT REMOVE" />
     </InstallExecuteSequence>
 
-  </Product>
+  </Package>
 </Wix>
