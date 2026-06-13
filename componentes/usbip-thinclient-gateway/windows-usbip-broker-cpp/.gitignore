@@ -1,0 +1,5 @@
+.wix/
+build/*.obj
+build/*.wixpdb
+build/compile.cmd
+build/tray/
