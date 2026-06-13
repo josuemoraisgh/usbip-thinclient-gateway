@@ -1,2 +1,8 @@
-/Documentação TVBOX.docx
-/reports/
+# Instaladores grandes demais para o GitHub (limite de 100MB por arquivo).
+# Devem ser copiados manualmente para componentes/ antes de rodar Install-All.ps1.
+componentes/581.29-desktop-win10-win11-64bit-international-dch-whql.exe
+componentes/Anaconda3-2025.12-2-Windows-x86_64.exe
+componentes/CODESYS 64 3.5.21.0.exe
+componentes/ININDUFU-Setup.exe
+componentes/OpenJDK21U-jdk_x64_windows_hotspot_21.0.7_6.msi
+componentes/Scada-LTS_v2.7.8.1_Installer_v2.1.0_Setup.exe

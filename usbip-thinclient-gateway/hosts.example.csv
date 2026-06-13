@@ -1,0 +1,6 @@
+# Arquivo de hosts para deploy-linux-manager.ps1
+# Formato: ip,senha_root
+# Linhas começando com # são ignoradas.
+192.168.100.31,senha_root_estacao01
+192.168.100.32,senha_root_estacao02
+192.168.100.33,senha_root_estacao03

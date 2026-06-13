@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(where wix *)",
+      "Bash(powershell -Command \"Get-Command wix -ErrorAction SilentlyContinue; Get-ChildItem 'C:\\\\Program Files*' -Filter '*WiX*' -ErrorAction SilentlyContinue\")",
+      "Read(//c/c/Prof_Jouse/00Instal/WinFullInstall/**)",
+      "Read(//c/c/Prof_Jouse/00Instal/WinFullInstall/componentes/**)"
+    ]
+  }
+}
