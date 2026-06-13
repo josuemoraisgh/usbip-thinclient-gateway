@@ -253,6 +253,32 @@ foreach ($cfg in $PerfisExistentes) {
     Write-Host "Perfil ja inicializado atualizado: $cfg"
 }
 
+# Ajusta tambem o CODESYSControl.cfg na raiz do GatewayPLC - e o arquivo
+# passado via "-d" pelo atalho .bat do professor (Iniciar_ControlWin_Professor.bat).
+# Sem isso, o NodeName so seria aplicado depois que o runtime copiar o
+# template de AppDataFiles para a WorkingDirectory do usuario que executar
+# o .bat (1a execucao), e enquanto isso o Gateway mostra o nome do
+# computador (ex.: FEELT-LASEC) em vez de "professor".
+$CfgRaizProfessor = Join-Path $OrigemCodesys "CODESYSControl.cfg"
+if (Test-Path $CfgRaizProfessor) {
+    Set-CodesysTarget -CfgPath $CfgRaizProfessor -NodeName 'professor' -Port $PortaProfessor
+    Write-Host "CODESYSControl.cfg (raiz) atualizado: NodeName=professor (webserver na porta $PortaProfessor)"
+}
+else {
+    Write-Warning "Arquivo nao encontrado: $CfgRaizProfessor"
+}
+
+# Perfil do Administrator, caso o .bat do professor ja tenha sido executado
+# ao menos uma vez (cria C:\Users\Administrator\AppData\Roaming\CODESYS\CODESYSControlWinV3x64\*)
+$PerfilAdminProfessor = Get-ChildItem "C:\Users\Administrator\AppData\Roaming\CODESYS\CODESYSControlWinV3x64" -Directory -ErrorAction SilentlyContinue |
+    ForEach-Object { Join-Path $_.FullName "CODESYSControl.cfg" } |
+    Where-Object { Test-Path $_ }
+
+foreach ($cfg in $PerfilAdminProfessor) {
+    Set-CodesysTarget -CfgPath $cfg -NodeName 'professor' -Port $PortaProfessor
+    Write-Host "Perfil do Administrator atualizado: $cfg"
+}
+
 # Mantem o servico "CODESYS Control Win V3 - x64" como inicializacao manual
 # e parado: igual as bancadas, o professor inicia sua instancia pelo atalho
 # .bat na Area de Trabalho.
