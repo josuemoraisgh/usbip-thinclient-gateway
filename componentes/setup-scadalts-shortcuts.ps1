@@ -95,6 +95,15 @@ function New-StudentShortcut {
     $shortcut.Save()
 }
 
+function New-ProfessorShortcut {
+    $shell = New-Object -ComObject WScript.Shell
+    $shortcut = $shell.CreateShortcut((Join-Path $AdministratorDesktop 'Scada-LTS - Professor.lnk'))
+    $shortcut.TargetPath = 'powershell.exe'
+    $shortcut.Arguments = "-NoProfile -Command Start-Process 'http://localhost:8108/Scada-LTS/'"
+    $shortcut.IconLocation = 'C:\Program Files\Scada-LTS\scadalts.ico'
+    $shortcut.Save()
+}
+
 Move-PublicShortcutToAdministrator `
     -SourceName 'Start MySQL Community Server 8.0.lnk' `
     -DestinationName 'Start MySQL Community Server 8.0.lnk'
@@ -145,7 +154,8 @@ foreach ($obsoleteName in @(
         'Start MySQL Community Server 8.0.lnk',
         'Stop MySQL Community Server 8.0.lnk',
         'Status Scada-LTS - Laboratorio.lnk',
-        'Scada-LTS - Minha Bancada.lnk'
+        'Scada-LTS - Minha Bancada.lnk',
+        'Scada-LTS - Professor.lnk'
     )) {
     $obsoletePath = Join-Path $AdministratorDesktop $obsoleteName
     if (Test-Path -LiteralPath $obsoletePath) {
@@ -190,7 +200,8 @@ New-ItemProperty -Path $runKey -Name 'ScadaLTS-Atalho-Usuario' -Value $runComman
 
 New-ControlShortcut -Name 'Iniciar Aula Scada-LTS - 7 Bancadas.lnk' -Action StartAula
 New-ControlShortcut -Name 'Encerrar Aula Scada-LTS - 7 Bancadas.lnk' -Action StopAula
+New-ProfessorShortcut
 
 Write-Host 'Desktop Publico: nenhum atalho Scada-LTS.'
 Write-Host "Controles administrativos criados em: $AdministratorDesktop"
-Write-Host 'O professor usa a mesma instancia da bancada204a-01 durante a aula.'
+Write-Host 'A instancia propria do professor usa a porta 8108.'

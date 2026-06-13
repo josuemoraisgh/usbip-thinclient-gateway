@@ -96,8 +96,8 @@ Log completo de cada execucao:
 8. **Scada-LTS Setup** - executa
    `Scada-LTS_v2.7.8.1_Installer_v2.1.0_Setup.exe`.
 9. **Scada-LTS isolado por bancada** - roda `setup-scadalts-bancadas.ps1`,
-   criando 7 instancias Tomcat e 7 bancos MySQL independentes para
-   `bancada204a-01` a `bancada204a-07`.
+   criando 8 instancias Tomcat e 8 bancos MySQL independentes: 7 para
+   `bancada204a-01` a `bancada204a-07` e uma para o professor.
 10. **process_simul (MSI)** - instala `process_simul-v0.0.7-windows.msi`.
 11. **ININDUFU Setup** - executa `ININDUFU-Setup.exe`.
 12. **USB/IP ThinClient Gateway** - roda
@@ -208,8 +208,8 @@ ambiente surtirem efeito.
 ### `setup-scadalts-bancadas.ps1`
 
 Cria uma instancia independente do Scada-LTS para cada uma das 7 bancadas
-ativas (`bancada204a-01` a `bancada204a-07`), sem duplicar o MySQL nem os
-arquivos grandes do aplicativo.
+ativas (`bancada204a-01` a `bancada204a-07`) e uma instancia propria para o
+professor, sem duplicar o MySQL nem os arquivos grandes do aplicativo.
 
 Estrutura criada em `C:\config\scadalts`:
 
@@ -224,7 +224,8 @@ Estrutura criada em `C:\config\scadalts`:
 Cada bancada recebe um schema e usuario MySQL exclusivos. Os schemas seguem o
 padrao `scadalts_bancada204a_01` a `scadalts_bancada204a_07`, os servicos
 Windows seguem o padrao `ScadaLTS-bancada204a-01`, e as portas HTTP sao
-`8101` a `8107`.
+`8101` a `8107`. O professor usa o banco `scadalts_professor`, o servico
+`ScadaLTS-professor` e a porta `8108`.
 
 As portas escutam apenas em `127.0.0.1`, pois o acesso ocorre dentro das
 sessoes RDS. Um atalho publico **Scada-LTS - Minha Bancada** identifica o
@@ -233,9 +234,9 @@ usuario conectado e abre a porta correta.
 O Desktop Publico nao possui atalhos Scada-LTS. Cada perfil ativo
 `bancada204a-01` a `bancada204a-07` recebe individualmente somente
 **Scada-LTS - Minha Bancada**. O professor recebe no Desktop do
-`Administrator` apenas **Iniciar Aula Scada-LTS - 7 Bancadas** e **Encerrar
-Aula Scada-LTS - 7 Bancadas**. Ao iniciar a aula, o MySQL e as sete instancias
-sao ligados e a instancia `bancada204a-01` e aberta para o professor. Ao
+`Administrator` os atalhos **Iniciar Aula Scada-LTS - 7 Bancadas**, **Encerrar
+Aula Scada-LTS - 7 Bancadas** e **Scada-LTS - Professor**. Ao iniciar a aula,
+o MySQL, as sete instancias e a instancia propria do professor sao ligados. Ao
 encerrar, tudo e parado novamente.
 
 Uma rotina silenciosa de logon cria esse unico atalho para as sete bancadas
@@ -249,7 +250,7 @@ O script:
    novos, sem substituir bancos de bancada ja existentes;
 3. restringe cada conta MySQL ao seu proprio schema;
 4. configura pools leves (`initialSize=1`, `minIdle=1`, `maxActive=10`);
-5. instala os 7 servicos como `LocalService`, com inicio manual e dependencia
+5. instala os 8 servicos como `LocalService`, com inicio manual e dependencia
    do MySQL;
 6. verifica servico, porta, HTTP e quantidade de tabelas de cada instancia.
 7. finaliza deixando MySQL e todas as instancias parados e manuais.

@@ -82,6 +82,7 @@ function Get-LaboratoryUsers {
     $result = [System.Collections.Generic.List[string]]::new()
 
     1..7 | ForEach-Object { $result.Add(('bancada204a-{0:D2}' -f $_)) }
+    $result.Add('professor')
 
     return $result.ToArray()
 }
@@ -473,7 +474,7 @@ $Users = @($Users | ForEach-Object { $_.ToLowerInvariant() } | Select-Object -Un
 
 foreach ($userName in $Users) {
     if ([Array]::IndexOf($allLaboratoryUsers, $userName) -lt 0) {
-        throw "Usuario fora do conjunto ativo das 7 bancadas: $userName"
+        throw "Usuario fora do conjunto ativo das 7 bancadas e professor: $userName"
     }
 }
 

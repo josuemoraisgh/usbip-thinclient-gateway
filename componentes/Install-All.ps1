@@ -11,7 +11,7 @@
       6. Anaconda3
       7. CODESYS 64 3.5.21.0
       8. Scada-LTS Setup
-      9. setup-scadalts-bancadas.ps1 (cria Scada-LTS isolado para as 7 bancadas 204a)
+      9. setup-scadalts-bancadas.ps1 (cria Scada-LTS isolado para 7 bancadas e professor)
       10. process_simul (MSI)
       11. ININDUFU-Setup
       12. USB/IP ThinClient Gateway (usbipd-win + broker C++ + monitor de bandeja)

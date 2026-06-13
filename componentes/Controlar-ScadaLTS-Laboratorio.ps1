@@ -45,9 +45,13 @@ if (-not (Test-IsAdministrator)) {
 }
 
 $mysqlName = 'MySQL Community Server 8.0'
-$professorName = 'Scada-LTS'
-$activeServiceNames = @(1..7 | ForEach-Object { 'ScadaLTS-bancada204a-{0:D2}' -f $_ })
-$bancadaServices = @(
+$originalScadaName = 'Scada-LTS'
+$professorServiceName = 'ScadaLTS-professor'
+$activeServiceNames = @(
+    1..7 | ForEach-Object { 'ScadaLTS-bancada204a-{0:D2}' -f $_ }
+    $professorServiceName
+)
+$activeServices = @(
     Get-Service -Name $activeServiceNames -ErrorAction Stop |
         Sort-Object Name
 )
@@ -59,37 +63,36 @@ switch ($Action) {
             Wait-ServiceState -Name $mysqlName -State Running
         }
 
-        foreach ($service in $bancadaServices) {
+        foreach ($service in $activeServices) {
             if ($service.Status -ne 'Running') {
                 Write-Host "Iniciando $($service.DisplayName)..."
                 Start-Service -Name $service.Name
             }
         }
 
-        foreach ($service in $bancadaServices) {
+        foreach ($service in $activeServices) {
             Wait-ServiceState -Name $service.Name -State Running
         }
 
-        Start-Process 'http://localhost:8101/Scada-LTS/'
-        Write-Host "Aula iniciada: MySQL e as $($bancadaServices.Count) instancias estao ativos." -ForegroundColor Green
-        Write-Host 'A instancia aberta para o professor e a mesma da bancada204a-01.'
+        Start-Process 'http://localhost:8108/Scada-LTS/'
+        Write-Host 'Aula iniciada: MySQL, 7 bancadas e instancia do professor estao ativos.' -ForegroundColor Green
     }
 
     'StopAula' {
-        foreach ($service in $bancadaServices) {
+        foreach ($service in $activeServices) {
             if ($service.Status -ne 'Stopped') {
                 Write-Host "Parando $($service.DisplayName)..."
                 Stop-Service -Name $service.Name -Force
             }
         }
 
-        foreach ($service in $bancadaServices) {
+        foreach ($service in $activeServices) {
             Wait-ServiceState -Name $service.Name -State Stopped
         }
 
-        if ((Get-Service -Name $professorName).Status -ne 'Stopped') {
-            Stop-Service -Name $professorName -Force
-            Wait-ServiceState -Name $professorName -State Stopped
+        if ((Get-Service -Name $originalScadaName).Status -ne 'Stopped') {
+            Stop-Service -Name $originalScadaName -Force
+            Wait-ServiceState -Name $originalScadaName -State Stopped
         }
 
         if ((Get-Service -Name $mysqlName).Status -ne 'Stopped') {
@@ -102,7 +105,7 @@ switch ($Action) {
     }
 
     'Status' {
-        Get-Service -Name (@($mysqlName, $professorName) + $activeServiceNames) |
+        Get-Service -Name (@($mysqlName, $originalScadaName) + $activeServiceNames) |
             Sort-Object Name |
             Select-Object Name, DisplayName, Status, StartType |
             Format-Table -AutoSize

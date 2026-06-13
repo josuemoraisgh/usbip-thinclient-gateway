@@ -26,7 +26,10 @@ $mysqlExe = Join-Path $ScadaInstallPath 'mysql\bin\mysql.exe'
 $sourceContext = Join-Path $ScadaInstallPath 'tomcat\conf\context.xml'
 $defaultsFile = Join-Path $BasePath 'temp\mysql-root-prune.cnf'
 $inactiveUsers = @(1..16 | ForEach-Object { 'bancada204b-{0:D2}' -f $_ })
-$activeServices = @(1..7 | ForEach-Object { 'ScadaLTS-bancada204a-{0:D2}' -f $_ })
+$activeServices = @(
+    1..7 | ForEach-Object { 'ScadaLTS-bancada204a-{0:D2}' -f $_ }
+    'ScadaLTS-professor'
+)
 
 function Write-AsciiFile {
     param([string]$Path, [string]$Content)
@@ -131,5 +134,5 @@ finally {
     }
 }
 
-Write-Host 'Reducao concluida: somente bancada204a-01 ate bancada204a-07 permanecem.' -ForegroundColor Green
+Write-Host 'Reducao concluida: permanecem as 7 bancadas e a instancia do professor.' -ForegroundColor Green
 Write-Host 'MySQL e todas as instancias Scada-LTS estao parados e manuais.'
