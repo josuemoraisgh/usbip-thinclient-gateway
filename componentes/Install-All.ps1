@@ -11,11 +11,13 @@
       6. Anaconda3
       7. CODESYS 64 3.5.21.0
       8. Scada-LTS Setup
-      9. process_simul (MSI)
-      10. ININDUFU-Setup
-      11. USB/IP ThinClient Gateway (usbipd-win + broker C++ + monitor de bandeja)
-      12. Configurar-Laboratorio-RDS.ps1 (pode reiniciar o servidor varias vezes)
-      13. setup-codesys-bancadas.ps1 (cria uma instancia do CODESYS Control Win por bancada)
+      9. setup-scadalts-bancadas.ps1 (cria Scada-LTS isolado para as 7 bancadas 204a)
+      10. process_simul (MSI)
+      11. ININDUFU-Setup
+      12. USB/IP ThinClient Gateway (usbipd-win + broker C++ + monitor de bandeja)
+      13. Configurar-Laboratorio-RDS.ps1 (pode reiniciar o servidor varias vezes)
+      14. setup-codesys-bancadas.ps1 (cria uma instancia do CODESYS Control Win por bancada)
+      15. organizar-desktops-laboratorio.ps1 (limpa o Desktop do professor e agrupa atalhos)
 
     Cada item e executado de forma interativa (janela visivel) e o script
     aguarda a conclusao de um antes de iniciar o proximo. Erros em um item
@@ -130,6 +132,10 @@ Invoke-Step 'Scada-LTS Setup' {
     Invoke-Installer 'Scada-LTS_v2.7.8.1_Installer_v2.1.0_Setup.exe'
 }
 
+Invoke-Step 'Scada-LTS isolado por bancada' {
+    Invoke-Script 'setup-scadalts-bancadas.ps1'
+}
+
 Invoke-Step 'process_simul (MSI)' {
     Invoke-Msi 'process_simul-v0.0.7-windows.msi'
 }
@@ -148,6 +154,10 @@ Invoke-Step 'Configurar-Laboratorio-RDS (AD DS + RDS) - pode reiniciar o servido
 
 Invoke-Step 'CODESYS Control Win por bancada' {
     Invoke-Script 'setup-codesys-bancadas.ps1'
+}
+
+Invoke-Step 'Organizar Desktops do laboratorio' {
+    Invoke-Script 'organizar-desktops-laboratorio.ps1'
 }
 
 Write-Host ""

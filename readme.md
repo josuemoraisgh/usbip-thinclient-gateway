@@ -95,17 +95,24 @@ Log completo de cada execucao:
    interativo da IDE + runtime "Control Win V3 x64").
 8. **Scada-LTS Setup** - executa
    `Scada-LTS_v2.7.8.1_Installer_v2.1.0_Setup.exe`.
-9. **process_simul (MSI)** - instala `process_simul-v0.0.7-windows.msi`.
-10. **ININDUFU Setup** - executa `ININDUFU-Setup.exe`.
-11. **USB/IP ThinClient Gateway** - roda
-    `usbip-thinclient-gateway\windows-usbip-broker-cpp\instalar.ps1`
-    (instala `usbipd-win` + o broker/monitor de bandeja do gateway USB/IP).
-12. **Configurar-Laboratorio-RDS** - roda `Configurar-Laboratorio-RDS.ps1`
-    (configura AD DS + RDS e cria os 23 usuarios das bancadas). E o **ultimo**
-    passo porque pode reiniciar o servidor varias vezes.
-13. **CODESYS Control Win por bancada** - roda
-    `setup-codesys-bancadas.ps1` (cria uma instancia isolada do runtime
-    CODESYS para cada uma das 23 bancadas).
+9. **Scada-LTS isolado por bancada** - roda `setup-scadalts-bancadas.ps1`,
+   criando 7 instancias Tomcat e 7 bancos MySQL independentes para
+   `bancada204a-01` a `bancada204a-07`.
+10. **process_simul (MSI)** - instala `process_simul-v0.0.7-windows.msi`.
+11. **ININDUFU Setup** - executa `ININDUFU-Setup.exe`.
+12. **USB/IP ThinClient Gateway** - roda
+   `usbip-thinclient-gateway\windows-usbip-broker-cpp\instalar.ps1`
+   (instala `usbipd-win` + o broker/monitor de bandeja do gateway USB/IP).
+13. **Configurar-Laboratorio-RDS** - roda `Configurar-Laboratorio-RDS.ps1`
+   (configura AD DS + RDS e cria os 23 usuarios das bancadas). E o **ultimo**
+   passo porque pode reiniciar o servidor varias vezes.
+14. **CODESYS Control Win por bancada** - roda
+   `setup-codesys-bancadas.ps1` (cria uma instancia isolada do runtime
+   CODESYS para cada uma das 23 bancadas).
+15. **Organizar Desktops do laboratorio** - roda
+    `organizar-desktops-laboratorio.ps1`, deixando no Desktop do professor
+    apenas controles operacionais e agrupando os atalhos gerais dos alunos
+    em uma pasta **Aplicativos do Laboratorio**.
 
 Itens 7, 8 e 10 (instaladores `.exe` interativos sem argumentos) e os MSIs
 (item 4 e 9) sao executados via `Invoke-Installer`/`Invoke-Msi` com
@@ -197,6 +204,68 @@ Arduino/ESP do laboratorio:
 E idempotente: se a pasta ja existe, apenas garante subpastas, variaveis e
 permissoes. Usuarios precisam abrir uma nova sessao para as variaveis de
 ambiente surtirem efeito.
+
+### `setup-scadalts-bancadas.ps1`
+
+Cria uma instancia independente do Scada-LTS para cada uma das 7 bancadas
+ativas (`bancada204a-01` a `bancada204a-07`), sem duplicar o MySQL nem os
+arquivos grandes do aplicativo.
+
+Estrutura criada em `C:\config\scadalts`:
+
+- `catalina-home` - binarios e bibliotecas Tomcat compartilhados;
+- `app\Scada-LTS` - uma unica copia expandida do aplicativo;
+- `instances\<bancada>` - configuracao, logs, temporarios, uploads e
+  `CATALINA_BASE` exclusivos;
+- `reports\last-verification.json` - resultado da ultima verificacao;
+- `launchers\Abrir-ScadaLTS-Minha-Bancada.ps1` - abre automaticamente a
+  instancia associada ao usuario RDS conectado.
+
+Cada bancada recebe um schema e usuario MySQL exclusivos. Os schemas seguem o
+padrao `scadalts_bancada204a_01` a `scadalts_bancada204a_07`, os servicos
+Windows seguem o padrao `ScadaLTS-bancada204a-01`, e as portas HTTP sao
+`8101` a `8107`.
+
+As portas escutam apenas em `127.0.0.1`, pois o acesso ocorre dentro das
+sessoes RDS. Um atalho publico **Scada-LTS - Minha Bancada** identifica o
+usuario conectado e abre a porta correta.
+
+O Desktop Publico nao possui atalhos Scada-LTS. Cada perfil ativo
+`bancada204a-01` a `bancada204a-07` recebe individualmente somente
+**Scada-LTS - Minha Bancada**. O professor recebe no Desktop do
+`Administrator` apenas **Iniciar Aula Scada-LTS - 7 Bancadas** e **Encerrar
+Aula Scada-LTS - 7 Bancadas**. Ao iniciar a aula, o MySQL e as sete instancias
+sao ligados e a instancia `bancada204a-01` e aberta para o professor. Ao
+encerrar, tudo e parado novamente.
+
+Uma rotina silenciosa de logon cria esse unico atalho para as sete bancadas
+ativas, inclusive quando o perfil ainda nao existia durante a instalacao, e
+remove atalhos Scada-LTS de usuarios inativos.
+
+O script:
+
+1. mantem o Scada-LTS original da porta `8080` parado e desativado;
+2. clona somente a estrutura/dados iniciais do banco `scadalts` para bancos
+   novos, sem substituir bancos de bancada ja existentes;
+3. restringe cada conta MySQL ao seu proprio schema;
+4. configura pools leves (`initialSize=1`, `minIdle=1`, `maxActive=10`);
+5. instala os 7 servicos como `LocalService`, com inicio manual e dependencia
+   do MySQL;
+6. verifica servico, porta, HTTP e quantidade de tabelas de cada instancia.
+7. finaliza deixando MySQL e todas as instancias parados e manuais.
+
+Execucao manual:
+
+```powershell
+.\setup-scadalts-bancadas.ps1
+```
+
+E idempotente e grava o relatorio final em
+`C:\config\scadalts\reports\last-verification.json`.
+
+O script `reduzir-scadalts-para-7-bancadas.ps1` remove permanentemente
+servicos, schemas, usuarios MySQL e diretorios antigos das bancadas
+`bancada204b-01` a `bancada204b-16`.
 
 ### `setup-codesys-bancadas.ps1`
 
